@@ -309,7 +309,7 @@ if ano_nac_seleccionado_str:
             st.subheader("📅 Partidos pendientes")
 
             df_pendientes = df_raw_data[df_raw_data["Estado"] == "Pendiente"].copy()
-            df_pendientes["Fecha"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce")
+            df_pendientes["Fecha"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce", dayfirst=True)
 
             col1, col2 = st.columns(2)
             with col1:
@@ -383,7 +383,7 @@ if ano_nac_seleccionado_str:
 
 
                 # ---------- Evolución de puntos ----------
-                jugados_equipo["Fecha"] = pd.to_datetime(jugados_equipo["Fecha y Hora"], errors="coerce")
+                jugados_equipo["Fecha"] = pd.to_datetime(jugados_equipo["Fecha y Hora"], errors="coerce", dayfirst=True)
                 jugados_equipo = jugados_equipo.sort_values("Fecha")
 
                 jugados_equipo["Rival"] = jugados_equipo.apply(
@@ -431,7 +431,7 @@ if ano_nac_seleccionado_str:
 
                 if not pendientes_equipo.empty:
                     st.subheader("📅 Partidos pendientes del equipo")
-                    pendientes_equipo["Fecha"] = pd.to_datetime(pendientes_equipo["Fecha y Hora"], errors="coerce")
+                    pendientes_equipo["Fecha"] = pd.to_datetime(pendientes_equipo["Fecha y Hora"], errors="coerce", dayfirst=True)
                     pendientes_equipo = pendientes_equipo.sort_values("Fecha")
                     st.dataframe(pendientes_equipo[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
                 else:
