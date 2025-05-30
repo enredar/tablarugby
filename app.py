@@ -366,17 +366,17 @@ if ano_nac_seleccionado_str:
                     st.metric("📊 Prom. P. a Favor / P. en Contra", f"{jugados_equipo['Puntos Equipo'].mean():.1f} / {jugados_equipo['Puntos Rival'].mean():.1f}")
                     st.metric("➖ Empatados", f"{empates} ({empates/total:.0%})")
 
-                # # ---------- Gráfico de resultados de barras----------
-                # fig1, ax1 = plt.subplots(figsize=(3, 3))  # más compacto
-                # ax1.pie(
-                #     [victorias, empates, derrotas],
-                #     labels=["Ganados", "Empatados", "Perdidos"],
-                #     autopct="%1.1f%%",
-                #     startangle=90,
-                #     colors=["#2ecc71", "#f1c40f", "#e74c3c"]
-                # )
-                # ax1.axis("equal")
-                # st.pyplot(fig1)
+                # ---------- Gráfico de resultados de barras----------
+                fig1, ax1 = plt.subplots(figsize=(3, 3))  # más compacto
+                ax1.pie(
+                    [victorias, empates, derrotas],
+                    labels=["Ganados", "Empatados", "Perdidos"],
+                    autopct="%1.1f%%",
+                    startangle=90,
+                    colors=["#2ecc71", "#f1c40f", "#e74c3c"]
+                )
+                ax1.axis("equal")
+                st.pyplot(fig1)
 
 
 
