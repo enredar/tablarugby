@@ -4,25 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
-
-
-
-st.set_page_config(page_title="Rugby Juveniles", layout="wide")
-
-# Estilo para centrar el contenido y limitar el ancho al 80%
-st.markdown("""
-    <style>
-        .main-container {
-            max-width: 80%;
-            margin: 0 auto;
-            padding: 2rem 1rem;
-        }
-    </style>
-    <div class="main-container">
-""", unsafe_allow_html=True)
-
-st.title("🏉 Tabla de Posiciones - Rugby Juveniles")
-
+from google_sheets_client import get_gspread_client, get_division_data, get_available_birth_years
+ 
 # ---------- Funciones auxiliares ----------
 
 def parse_resultado(resultado):
@@ -251,194 +234,245 @@ def predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_res
     return max(0, int(pred_l_final)), max(0, int(pred_v_final))
 
 
+st.set_page_config(page_title="Rugby Juveniles", layout="wide")
 
-# ---------- Carga de datos ----------
-uploaded_file = st.file_uploader("📁 Subí el archivo CSV con los resultados", type="csv")
+# Estilo para centrar el contenido y limitar el ancho al 80%
+st.markdown("""
+    <style>
+        .main-container {
+            max-width: 80%;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+    </style>
+    <div class="main-container">
+""", unsafe_allow_html=True)
 
-if uploaded_file:
-    df_raw = pd.read_csv(uploaded_file)
+st.title("🏉 Tabla de Posiciones - Rugby Juveniles")
 
-    # Validar columnas requeridas
-    expected_cols = ['Nro.', 'Local', 'ResultadoL', 'ResultadoV', 'Visitante', 'Fecha y Hora', 'Estado']
-    if not all(col in df_raw.columns for col in expected_cols):
-        st.dataframe(df_raw)
-        st.error("El archivo no tiene las columnas esperadas")
-    else:
-        # Tabla de posiciones
-        df_jugados = df_raw[df_raw["Estado"].str.startswith("Cerrado")].copy()
-        st.subheader("📊 Tabla de posiciones")
-        tabla_posiciones = procesar_partidos(df_jugados)
-        st.dataframe(tabla_posiciones, hide_index=True, use_container_width=True)
 
-        # Partidos pendientes
-        st.markdown("---")
-        st.subheader("📅 Partidos pendientes")
+# --- Conexión a Google Sheets ---
+# (get_gspread_client se cachea y solo se ejecuta una vez o cuando sea necesario)
+gs_client = get_gspread_client()
 
-        df_pendientes = df_raw[df_raw["Estado"] == "Pendiente"].copy()
-        df_pendientes["Fecha"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce")
+# --- Selección de División (Año de Nacimiento) ---
+# Obtener dinámicamente los años/pestañas disponibles
+available_years_str = get_available_birth_years(gs_client)
+# Convertir a int para ordenar si son numéricos, luego a str para el selectbox
+try:
+    available_years_int = sorted([int(y) for y in available_years_str if y.isdigit()], reverse=True)
+    options_for_selectbox = [str(y) for y in available_years_int]
+except ValueError:
+    options_for_selectbox = sorted(available_years_str) # Si no son todos números, orden alfabético
 
-        col1, col2 = st.columns(2)
-        with col1:
-            ordenar_por = st.selectbox("Ordenar por", ["Fecha", "Local", "Visitante"])
-        with col2:
-            asc = st.radio("Orden", ["Ascendente", "Descendente"], horizontal=True) == "Ascendente"
+# Año por defecto (ej. el más reciente o uno común)
+default_year = "2010" if "2010" in options_for_selectbox else (options_for_selectbox[0] if options_for_selectbox else None)
 
-        if ordenar_por == "Fecha":
-            df_pendientes = df_pendientes.sort_values("Fecha", ascending=asc)
+if not default_year:
+    st.error("No se pudieron cargar las divisiones desde Google Sheets y no hay fallback. Verifica la configuración.")
+    st.stop()
+
+ano_nac_seleccionado_str = st.sidebar.selectbox(
+    "Seleccioná el Año de Nacimiento de la División:",
+    options=options_for_selectbox,
+    index=options_for_selectbox.index(default_year) if default_year in options_for_selectbox else 0
+)
+st.sidebar.info(f"Mostrando datos para jugadores nacidos en {ano_nac_seleccionado_str}")
+
+
+# --- Carga de Datos para la División Seleccionada ---
+if ano_nac_seleccionado_str:
+    df_raw_data = get_division_data(gs_client, ano_nac_seleccionado_str)
+
+    if df_raw_data.empty and ano_nac_seleccionado_str in available_years_str : # Si la pestaña existe pero está vacía o falló la carga
+        st.warning(f"No hay datos disponibles en la planilla para el año {ano_nac_seleccionado_str} o hubo un error al cargar.")
+    elif not df_raw_data.empty:
+        # st.dataframe(df_raw_data.head()) # Para depurar los datos cargados
+
+        # AHORA USAS df_raw_data PARA TUS PROCESAMIENTOS
+        # Ya no necesitas la lógica de 'uploaded_file' para obtener los datos principales.
+
+        # Validar columnas requeridas (¡importante!)
+        expected_cols = ['Nro.', 'Local', 'ResultadoL', 'ResultadoV', 'Visitante', 'Fecha y Hora', 'Estado']
+        if not all(col in df_raw_data.columns for col in expected_cols):
+            st.error(f"La planilla para el año {ano_nac_seleccionado_str} no tiene todas las columnas esperadas: {expected_cols}")
+
         else:
-            df_pendientes = df_pendientes.sort_values(ordenar_por, ascending=asc)
+            # Tabla de posiciones
+            df_jugados = df_raw_data[df_raw_data["Estado"].str.startswith("Cerrado")].copy()
+            st.subheader("📊 Tabla de posiciones")
+            tabla_posiciones = procesar_partidos(df_jugados)
+            st.dataframe(tabla_posiciones, hide_index=True, use_container_width=True)
 
-        st.dataframe(df_pendientes[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
-
-        # ---------- Análisis por equipo ----------
-        st.markdown("---")
-        st.subheader("📈 Análisis por equipo")
-
-        equipos = sorted(tabla_posiciones["Equipo"].unique())
-        equipo_sel = st.selectbox("Seleccioná un equipo", equipos)
-
-        if equipo_sel:
-            # Partidos jugados por el equipo
-            jugados_equipo = df_jugados[(df_jugados["Local"] == equipo_sel) | (df_jugados["Visitante"] == equipo_sel)].copy()
-            
-            # Parseo de resultados
-            jugados_equipo["Puntos Equipo"] = jugados_equipo.apply(
-                lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[0],
-                axis=1
-            )
-            jugados_equipo["Puntos Rival"] = jugados_equipo.apply(
-                lambda row: parse_resultado(row["ResultadoV"] if row["Local"] == equipo_sel else row["ResultadoL"])[0],
-                axis=1
-            )
-            jugados_equipo["Pts Torneo"] = jugados_equipo.apply(
-                lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[1],
-                axis=1
-            )
-
-            # Cálculo de victorias, empates, derrotas
-            victorias = (jugados_equipo["Puntos Equipo"] > jugados_equipo["Puntos Rival"]).sum()
-            empates = (jugados_equipo["Puntos Equipo"] == jugados_equipo["Puntos Rival"]).sum()
-            derrotas = (jugados_equipo["Puntos Equipo"] < jugados_equipo["Puntos Rival"]).sum()
-            total = len(jugados_equipo)
-
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("🏉 Partidos jugados", total)
-                st.metric("✅ Ganados", f"{victorias} ({victorias/total:.0%})")
-            with col2:
-                st.metric("🔢 Puntos en el torneo", jugados_equipo["Pts Torneo"].sum())
-                st.metric("❌ Perdidos", f"{derrotas} ({derrotas/total:.0%})")
-            with col3:
-                st.metric("📊 Prom. P. a Favor / P. en Contra", f"{jugados_equipo['Puntos Equipo'].mean():.1f} / {jugados_equipo['Puntos Rival'].mean():.1f}")
-                st.metric("➖ Empatados", f"{empates} ({empates/total:.0%})")
-
-            # ---------- Gráfico de resultados de barras----------
-            fig1, ax1 = plt.subplots(figsize=(3, 3))  # más compacto
-            ax1.pie(
-                [victorias, empates, derrotas],
-                labels=["Ganados", "Empatados", "Perdidos"],
-                autopct="%1.1f%%",
-                startangle=90,
-                colors=["#2ecc71", "#f1c40f", "#e74c3c"]
-            )
-            ax1.axis("equal")
-            st.pyplot(fig1)
-
-
-
-
-
-            # ---------- Evolución de puntos ----------
-            jugados_equipo["Fecha"] = pd.to_datetime(jugados_equipo["Fecha y Hora"], errors="coerce")
-            jugados_equipo = jugados_equipo.sort_values("Fecha")
-
-            jugados_equipo["Rival"] = jugados_equipo.apply(
-                lambda row: row["Visitante"] if row["Local"] == equipo_sel else row["Local"],
-                axis=1
-            )
-            jugados_equipo["Etiqueta"] = jugados_equipo.apply(
-                lambda row: f"{row['Rival']} ({row['Fecha'].strftime('%d/%m')})", axis=1
-            )
-
-            # Crear DataFrame para gráfico de barras agrupadas
-            df_barras = pd.melt(
-                jugados_equipo[["Etiqueta", "Puntos Equipo", "Puntos Rival"]],
-                id_vars="Etiqueta",
-                var_name="Tipo",
-                value_name="Puntos"
-            )
-
-            # Renombrar los tipos
-            df_barras["Tipo"] = df_barras["Tipo"].map({
-                "Puntos Equipo": "A favor",
-                "Puntos Rival": "En contra"
-            })
-
-            # Gráfico de barras
-            fig2, ax2 = plt.subplots(figsize=(10, 5))
-            barplot = sns.barplot(data=df_barras, x="Etiqueta", y="Puntos", hue="Tipo", ax=ax2, palette=["#3498db", "#e74c3c"])
-
-            # Agregar los valores encima de las barras
-            for container in ax2.containers:
-                ax2.bar_label(container, fmt="%.0f", label_type='edge', padding=3, fontsize=8)
-
-            # Mejoras estéticas del eje X
-            ax2.set_title(f"Puntos por partido - {equipo_sel}")
-            ax2.set_ylabel("Puntos")
-            ax2.set_xlabel("Rival (Fecha)")
-            ax2.tick_params(axis='x', rotation=60, labelsize=8)
-            fig2.tight_layout()
-
-            st.pyplot(fig2)
-            # ---------- Mostrar partidos pendientes ----------
-            pendientes_equipo = df_pendientes[
-                (df_pendientes["Local"] == equipo_sel) | (df_pendientes["Visitante"] == equipo_sel)
-            ].copy()
-
-            if not pendientes_equipo.empty:
-                st.subheader("📅 Partidos pendientes del equipo")
-                pendientes_equipo["Fecha"] = pd.to_datetime(pendientes_equipo["Fecha y Hora"], errors="coerce")
-                pendientes_equipo = pendientes_equipo.sort_values("Fecha")
-                st.dataframe(pendientes_equipo[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
-            else:
-                st.info("Este equipo no tiene partidos pendientes.")
-
-            # ---------- Predicción de partidos pendientes ----------
+            # Partidos pendientes
             st.markdown("---")
-            st.subheader("🔮 Predicción de partidos pendientes")
+            st.subheader("📅 Partidos pendientes")
 
-            if df_pendientes.empty:
-                st.info("No hay partidos pendientes para mostrar predicciones.")
-            elif df_jugados.empty:
-                st.warning("No hay datos de partidos jugados (cerrados). No se pueden generar predicciones detalladas.")
-                # Opcionalmente, mostrar solo los partidos pendientes sin predicción:
-                st.dataframe(df_pendientes[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
-            # Omití la comprobación de tabla_posiciones.empty aquí porque predecir_resultado tiene fallbacks internos
-            # si un rival no está en tabla_posiciones o tabla_posiciones está vacía (fuerza_rivales = 1.0)
+            df_pendientes = df_raw_data[df_raw_data["Estado"] == "Pendiente"].copy()
+            df_pendientes["Fecha"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                ordenar_por = st.selectbox("Ordenar por", ["Fecha", "Local", "Visitante"])
+            with col2:
+                asc = st.radio("Orden", ["Ascendente", "Descendente"], horizontal=True) == "Ascendente"
+
+            if ordenar_por == "Fecha":
+                df_pendientes = df_pendientes.sort_values("Fecha", ascending=asc)
             else:
-                predicciones_list = [] # Renombrado para evitar conflicto si predicciones es una función
-                for _, row in df_pendientes.iterrows():
-                    local = row["Local"]
-                    visitante = row["Visitante"]
-                    
-                    # Es buena idea verificar si los equipos existen en tabla_posiciones si la lógica de fuerza depende de ello
-                    # aunque tu función actual busca rivales y tiene un default.
+                df_pendientes = df_pendientes.sort_values(ordenar_por, ascending=asc)
 
-                    pred_l, pred_v = predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_resultado)
-                    
-                    predicciones_list.append({
-                        "Local": local,
-                        "Visitante": visitante,
-                        "Pred. Local": pred_l if pred_l is not None else "N/A", # Muestra N/A si es None
-                        "Pred. Visitante": pred_v if pred_v is not None else "N/A", # Muestra N/A si es None
-                        "Fecha y Hora": row["Fecha y Hora"]
-                    })
+            st.dataframe(df_pendientes[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
 
-                if predicciones_list:
-                    df_pred = pd.DataFrame(predicciones_list)
-                    st.dataframe(df_pred[["Fecha y Hora", "Local", "Pred. Local", "Visitante", "Pred. Visitante"]], hide_index=True, use_container_width=True)
-                elif not df_pendientes.empty: # Había partidos pendientes pero no se generó la lista (improbable con el N/A)
-                    st.info("No se pudieron generar predicciones para los partidos pendientes.")
+            # ---------- Análisis por equipo ----------
+            st.markdown("---")
+            st.subheader("📈 Análisis por equipo")
+
+            equipos = sorted(tabla_posiciones["Equipo"].unique())
+            equipo_sel = st.selectbox("Seleccioná un equipo", equipos)
+
+            if equipo_sel:
+                # Partidos jugados por el equipo
+                jugados_equipo = df_jugados[(df_jugados["Local"] == equipo_sel) | (df_jugados["Visitante"] == equipo_sel)].copy()
+                
+                # Parseo de resultados
+                jugados_equipo["Puntos Equipo"] = jugados_equipo.apply(
+                    lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[0],
+                    axis=1
+                )
+                jugados_equipo["Puntos Rival"] = jugados_equipo.apply(
+                    lambda row: parse_resultado(row["ResultadoV"] if row["Local"] == equipo_sel else row["ResultadoL"])[0],
+                    axis=1
+                )
+                jugados_equipo["Pts Torneo"] = jugados_equipo.apply(
+                    lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[1],
+                    axis=1
+                )
+
+                # Cálculo de victorias, empates, derrotas
+                victorias = (jugados_equipo["Puntos Equipo"] > jugados_equipo["Puntos Rival"]).sum()
+                empates = (jugados_equipo["Puntos Equipo"] == jugados_equipo["Puntos Rival"]).sum()
+                derrotas = (jugados_equipo["Puntos Equipo"] < jugados_equipo["Puntos Rival"]).sum()
+                total = len(jugados_equipo)
+
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("🏉 Partidos jugados", total)
+                    st.metric("✅ Ganados", f"{victorias} ({victorias/total:.0%})")
+                with col2:
+                    st.metric("🔢 Puntos en el torneo", jugados_equipo["Pts Torneo"].sum())
+                    st.metric("❌ Perdidos", f"{derrotas} ({derrotas/total:.0%})")
+                with col3:
+                    st.metric("📊 Prom. P. a Favor / P. en Contra", f"{jugados_equipo['Puntos Equipo'].mean():.1f} / {jugados_equipo['Puntos Rival'].mean():.1f}")
+                    st.metric("➖ Empatados", f"{empates} ({empates/total:.0%})")
+
+                # # ---------- Gráfico de resultados de barras----------
+                # fig1, ax1 = plt.subplots(figsize=(3, 3))  # más compacto
+                # ax1.pie(
+                #     [victorias, empates, derrotas],
+                #     labels=["Ganados", "Empatados", "Perdidos"],
+                #     autopct="%1.1f%%",
+                #     startangle=90,
+                #     colors=["#2ecc71", "#f1c40f", "#e74c3c"]
+                # )
+                # ax1.axis("equal")
+                # st.pyplot(fig1)
+
+
+
+
+
+                # ---------- Evolución de puntos ----------
+                jugados_equipo["Fecha"] = pd.to_datetime(jugados_equipo["Fecha y Hora"], errors="coerce")
+                jugados_equipo = jugados_equipo.sort_values("Fecha")
+
+                jugados_equipo["Rival"] = jugados_equipo.apply(
+                    lambda row: row["Visitante"] if row["Local"] == equipo_sel else row["Local"],
+                    axis=1
+                )
+                jugados_equipo["Etiqueta"] = jugados_equipo.apply(
+                    lambda row: f"{row['Rival']} ({row['Fecha'].strftime('%d/%m')})", axis=1
+                )
+
+                # Crear DataFrame para gráfico de barras agrupadas
+                df_barras = pd.melt(
+                    jugados_equipo[["Etiqueta", "Puntos Equipo", "Puntos Rival"]],
+                    id_vars="Etiqueta",
+                    var_name="Tipo",
+                    value_name="Puntos"
+                )
+
+                # Renombrar los tipos
+                df_barras["Tipo"] = df_barras["Tipo"].map({
+                    "Puntos Equipo": "A favor",
+                    "Puntos Rival": "En contra"
+                })
+
+                # Gráfico de barras
+                fig2, ax2 = plt.subplots(figsize=(10, 5))
+                barplot = sns.barplot(data=df_barras, x="Etiqueta", y="Puntos", hue="Tipo", ax=ax2, palette=["#3498db", "#e74c3c"])
+
+                # Agregar los valores encima de las barras
+                for container in ax2.containers:
+                    ax2.bar_label(container, fmt="%.0f", label_type='edge', padding=3, fontsize=8)
+
+                # Mejoras estéticas del eje X
+                ax2.set_title(f"Puntos por partido - {equipo_sel}")
+                ax2.set_ylabel("Puntos")
+                ax2.set_xlabel("Rival (Fecha)")
+                ax2.tick_params(axis='x', rotation=60, labelsize=8)
+                fig2.tight_layout()
+
+                st.pyplot(fig2)
+                # ---------- Mostrar partidos pendientes ----------
+                pendientes_equipo = df_pendientes[
+                    (df_pendientes["Local"] == equipo_sel) | (df_pendientes["Visitante"] == equipo_sel)
+                ].copy()
+
+                if not pendientes_equipo.empty:
+                    st.subheader("📅 Partidos pendientes del equipo")
+                    pendientes_equipo["Fecha"] = pd.to_datetime(pendientes_equipo["Fecha y Hora"], errors="coerce")
+                    pendientes_equipo = pendientes_equipo.sort_values("Fecha")
+                    st.dataframe(pendientes_equipo[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
+                else:
+                    st.info("Este equipo no tiene partidos pendientes.")
+
+                # ---------- Predicción de partidos pendientes ----------
+                st.markdown("---")
+                st.subheader("🔮 Predicción de partidos pendientes")
+
+                if df_pendientes.empty:
+                    st.info("No hay partidos pendientes para mostrar predicciones.")
+                elif df_jugados.empty:
+                    st.warning("No hay datos de partidos jugados (cerrados). No se pueden generar predicciones detalladas.")
+                    # Opcionalmente, mostrar solo los partidos pendientes sin predicción:
+                    st.dataframe(df_pendientes[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
+                # Omití la comprobación de tabla_posiciones.empty aquí porque predecir_resultado tiene fallbacks internos
+                # si un rival no está en tabla_posiciones o tabla_posiciones está vacía (fuerza_rivales = 1.0)
+                else:
+                    predicciones_list = [] # Renombrado para evitar conflicto si predicciones es una función
+                    for _, row in df_pendientes.iterrows():
+                        local = row["Local"]
+                        visitante = row["Visitante"]
+                        
+                        # Es buena idea verificar si los equipos existen en tabla_posiciones si la lógica de fuerza depende de ello
+                        # aunque tu función actual busca rivales y tiene un default.
+
+                        pred_l, pred_v = predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_resultado)
+                        
+                        predicciones_list.append({
+                            "Local": local,
+                            "Visitante": visitante,
+                            "Pred. Local": pred_l if pred_l is not None else "N/A", # Muestra N/A si es None
+                            "Pred. Visitante": pred_v if pred_v is not None else "N/A", # Muestra N/A si es None
+                            "Fecha y Hora": row["Fecha y Hora"]
+                        })
+
+                    if predicciones_list:
+                        df_pred = pd.DataFrame(predicciones_list)
+                        st.dataframe(df_pred[["Fecha y Hora", "Local", "Pred. Local", "Visitante", "Pred. Visitante"]], hide_index=True, use_container_width=True)
+                    elif not df_pendientes.empty: # Había partidos pendientes pero no se generó la lista (improbable con el N/A)
+                        st.info("No se pudieron generar predicciones para los partidos pendientes.")
 
 
 else:
