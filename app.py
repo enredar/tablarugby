@@ -272,13 +272,16 @@ if not default_year:
     st.error("No se pudieron cargar las divisiones desde Google Sheets y no hay fallback. Verifica la configuración.")
     st.stop()
 
-ano_nac_seleccionado_str = st.sidebar.selectbox(
-    "Seleccioná el Año de Nacimiento de la División:",
-    options=options_for_selectbox,
-    index=options_for_selectbox.index(default_year) if default_year in options_for_selectbox else 0
-)
-st.sidebar.info(f"Mostrando datos para jugadores nacidos en {ano_nac_seleccionado_str}")
+st.markdown("### 📅 Seleccioná el Año de Nacimiento:")
 
+cols = st.columns(len(options_for_selectbox))
+for i, year in enumerate(options_for_selectbox):
+    if cols[i].button(str(year), key=f"btn_{year}"):
+        st.session_state["ano_nac_seleccionado_str"] = year
+
+# Valor por defecto si no hay selección aún
+ano_nac_seleccionado_str = st.session_state.get("ano_nac_seleccionado_str", default_year)
+st.markdown("---")
 
 # --- Carga de Datos para la División Seleccionada ---
 if ano_nac_seleccionado_str:
@@ -308,47 +311,39 @@ if ano_nac_seleccionado_str:
             df_pendientes = df_raw_data[df_raw_data["Estado"] == "Pendiente"].copy()
             df_pendientes["Fecha"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce", dayfirst=True)
 
-            # Clubes únicos ordenados alfabéticamente
+            # Clubes únicos ordenados
             clubes_locales = df_pendientes["Local"].unique()
             clubes_visitantes = df_pendientes["Visitante"].unique()
             clubes_unicos = sorted(set(clubes_locales) | set(clubes_visitantes))
 
-            # Estado para checkboxes
-            if "clubes_seleccionados" not in st.session_state:
-                st.session_state["clubes_seleccionados"] = {club: True for club in clubes_unicos}
+            # Selección de modo de filtrado
+            modo_filtro = st.selectbox("🔎 Filtrar partidos pendientes por clubes:", ["Todos los clubes", "Seleccionar clubes..."])
 
-            # Botones de selección global
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button("✅ Seleccionar todos"):
-                    for club in clubes_unicos:
-                        st.session_state["clubes_seleccionados"][club] = True
-            with col2:
-                if st.button("❌ Limpiar selección"):
-                    for club in clubes_unicos:
-                        st.session_state["clubes_seleccionados"][club] = False
+            # Estado de checkboxes si se elige filtrar
+            clubes_activos = clubes_unicos.copy()  # default: todos
 
-            # Expander con checkboxes de clubes
-            with st.expander("🔍 Filtrar por clubes"):
-                for club in clubes_unicos:
-                    st.session_state["clubes_seleccionados"][club] = st.checkbox(
-                        label=club,
-                        value=st.session_state["clubes_seleccionados"][club],
-                        key=f"cb_{club}"
-                    )
+            if modo_filtro == "Seleccionar clubes...":
+                if "clubes_checklist" not in st.session_state:
+                    st.session_state["clubes_checklist"] = {club: True for club in clubes_unicos}
 
-            # Obtener clubes seleccionados
-            clubes_activos = [club for club, activo in st.session_state["clubes_seleccionados"].items() if activo]
+                with st.expander("✅ Elegí los clubes que querés ver"):
+                    cols = st.columns(3)  # distribuye en 3 columnas para mejor UX
+                    for i, club in enumerate(clubes_unicos):
+                        col = cols[i % 3]
+                        st.session_state["clubes_checklist"][club] = col.checkbox(
+                            club,
+                            value=st.session_state["clubes_checklist"][club],
+                            key=f"check_{club}"
+                        )
 
-            # Mostrar resumen de selección
-            if len(clubes_activos) == len(clubes_unicos):
-                st.markdown("**Mostrando todos los clubes.**")
-            elif len(clubes_activos) == 0:
-                st.warning("No hay clubes seleccionados. No se muestran partidos.")
-            else:
-                st.markdown(f"**Mostrando partidos de:** {', '.join(clubes_activos)}")
+                clubes_activos = [club for club, activo in st.session_state["clubes_checklist"].items() if activo]
 
-            # Filtrar partidos
+                if len(clubes_activos) == 0:
+                    st.warning("No seleccionaste ningún club. No se mostrarán partidos.")
+                else:
+                    st.markdown(f"**Mostrando partidos de:** {', '.join(clubes_activos)}")
+
+            # Filtrado de DataFrame
             df_filtrado = df_pendientes[
                 df_pendientes["Local"].isin(clubes_activos) |
                 df_pendientes["Visitante"].isin(clubes_activos)
@@ -505,35 +500,71 @@ if ano_nac_seleccionado_str:
                     st.info("No hay partidos pendientes para mostrar predicciones.")
                 elif df_jugados.empty:
                     st.warning("No hay datos de partidos jugados (cerrados). No se pueden generar predicciones detalladas.")
-                    # Opcionalmente, mostrar solo los partidos pendientes sin predicción:
                     st.dataframe(df_pendientes[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
-                # Omití la comprobación de tabla_posiciones.empty aquí porque predecir_resultado tiene fallbacks internos
-                # si un rival no está en tabla_posiciones o tabla_posiciones está vacía (fuerza_rivales = 1.0)
                 else:
-                    predicciones_list = [] # Renombrado para evitar conflicto si predicciones es una función
-                    for _, row in df_pendientes.iterrows():
-                        local = row["Local"]
-                        visitante = row["Visitante"]
-                        
-                        # Es buena idea verificar si los equipos existen en tabla_posiciones si la lógica de fuerza depende de ello
-                        # aunque tu función actual busca rivales y tiene un default.
+                    st.markdown("**🔍 Filtrado de partidos para predicción**")
 
-                        pred_l, pred_v = predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_resultado)
-                        
-                        predicciones_list.append({
-                            "Local": local,
-                            "Visitante": visitante,
-                            "Pred. Local": pred_l if pred_l is not None else "N/A", # Muestra N/A si es None
-                            "Pred. Visitante": pred_v if pred_v is not None else "N/A", # Muestra N/A si es None
-                            "Fecha y Hora": row["Fecha y Hora"]
-                        })
+                    clubes_locales = df_pendientes["Local"].unique()
+                    clubes_visitantes = df_pendientes["Visitante"].unique()
+                    clubes_unicos = sorted(set(clubes_locales) | set(clubes_visitantes))
 
-                    if predicciones_list:
+                    # Inicializar estado de selección si no existe
+                    if "clubes_checklist_pred" not in st.session_state:
+                        st.session_state["clubes_checklist_pred"] = {club: False for club in clubes_unicos}
+
+                    if "seleccion_pred_todos" not in st.session_state:
+                        st.session_state["seleccion_pred_todos"] = False  # default: ninguno seleccionado
+
+                    with st.expander("✅ Elegí los clubes para predecir (ninguno seleccionado por defecto)"):
+                        col_button, _ = st.columns([1, 3])
+                        accion = "Seleccionar todos" if not all(st.session_state["clubes_checklist_pred"].values()) else "Deseleccionar todos"
+                        if col_button.button(accion, key="boton_toggle_pred"):
+                            nuevo_estado = not all(st.session_state["clubes_checklist_pred"].values())
+                            for club in clubes_unicos:
+                                st.session_state["clubes_checklist_pred"][club] = nuevo_estado
+
+                        cols = st.columns(3)
+                        for i, club in enumerate(clubes_unicos):
+                            col = cols[i % 3]
+                            st.session_state["clubes_checklist_pred"][club] = col.checkbox(
+                                club,
+                                value=st.session_state["clubes_checklist_pred"][club],
+                                key=f"check_pred_{club}"
+                            )
+
+                    # Filtrado activo
+                    clubes_pred_activos = [
+                        club for club, activo in st.session_state["clubes_checklist_pred"].items() if activo
+                    ]
+
+                    if not clubes_pred_activos:
+                        st.info("Seleccioná uno o más clubes para mostrar las predicciones.")
+                    else:
+                        df_pendientes_filtrados = df_pendientes[
+                            df_pendientes["Local"].isin(clubes_pred_activos) |
+                            df_pendientes["Visitante"].isin(clubes_pred_activos)
+                        ].sort_values("Fecha")
+
+                        predicciones_list = []
+                        for _, row in df_pendientes_filtrados.iterrows():
+                            local = row["Local"]
+                            visitante = row["Visitante"]
+                            pred_l, pred_v = predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_resultado)
+                            predicciones_list.append({
+                                "Fecha y Hora": row["Fecha y Hora"],
+                                "Local": local,
+                                "Pred. Local": pred_l if pred_l is not None else "N/A",
+                                "Visitante": visitante,
+                                "Pred. Visitante": pred_v if pred_v is not None else "N/A"
+                            })
+
                         df_pred = pd.DataFrame(predicciones_list)
-                        st.dataframe(df_pred[["Fecha y Hora", "Local", "Pred. Local", "Visitante", "Pred. Visitante"]], hide_index=True, use_container_width=True)
-                    elif not df_pendientes.empty: # Había partidos pendientes pero no se generó la lista (improbable con el N/A)
-                        st.info("No se pudieron generar predicciones para los partidos pendientes.")
-
+                        st.markdown(f"**Mostrando predicciones para:** {', '.join(clubes_pred_activos)}")
+                        st.dataframe(
+                            df_pred[["Fecha y Hora", "Local", "Pred. Local", "Visitante", "Pred. Visitante"]],
+                            hide_index=True,
+                            use_container_width=True
+                        )
 
 else:
     st.info("Esperando que cargues un archivo CSV con los resultados.")
