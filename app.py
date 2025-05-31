@@ -289,9 +289,6 @@ if ano_nac_seleccionado_str:
     elif not df_raw_data.empty:
         # st.dataframe(df_raw_data.head()) # Para depurar los datos cargados
 
-        # AHORA USAS df_raw_data PARA TUS PROCESAMIENTOS
-        # Ya no necesitas la lógica de 'uploaded_file' para obtener los datos principales.
-
         # Validar columnas requeridas (¡importante!)
         expected_cols = ['Nro.', 'Local', 'ResultadoL', 'ResultadoV', 'Visitante', 'Fecha y Hora', 'Estado']
         if not all(col in df_raw_data.columns for col in expected_cols):
@@ -311,72 +308,135 @@ if ano_nac_seleccionado_str:
             df_pendientes = df_raw_data[df_raw_data["Estado"] == "Pendiente"].copy()
             df_pendientes["Fecha"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce", dayfirst=True)
 
-            col1, col2 = st.columns(2)
+            # Clubes únicos ordenados alfabéticamente
+            clubes_locales = df_pendientes["Local"].unique()
+            clubes_visitantes = df_pendientes["Visitante"].unique()
+            clubes_unicos = sorted(set(clubes_locales) | set(clubes_visitantes))
+
+            # Estado para checkboxes
+            if "clubes_seleccionados" not in st.session_state:
+                st.session_state["clubes_seleccionados"] = {club: True for club in clubes_unicos}
+
+            # Botones de selección global
+            col1, col2 = st.columns([1, 1])
             with col1:
-                ordenar_por = st.selectbox("Ordenar por", ["Fecha", "Local", "Visitante"])
+                if st.button("✅ Seleccionar todos"):
+                    for club in clubes_unicos:
+                        st.session_state["clubes_seleccionados"][club] = True
             with col2:
-                asc = st.radio("Orden", ["Ascendente", "Descendente"], horizontal=True) == "Ascendente"
+                if st.button("❌ Limpiar selección"):
+                    for club in clubes_unicos:
+                        st.session_state["clubes_seleccionados"][club] = False
 
-            if ordenar_por == "Fecha":
-                df_pendientes = df_pendientes.sort_values("Fecha", ascending=asc)
+            # Expander con checkboxes de clubes
+            with st.expander("🔍 Filtrar por clubes"):
+                for club in clubes_unicos:
+                    st.session_state["clubes_seleccionados"][club] = st.checkbox(
+                        label=club,
+                        value=st.session_state["clubes_seleccionados"][club],
+                        key=f"cb_{club}"
+                    )
+
+            # Obtener clubes seleccionados
+            clubes_activos = [club for club, activo in st.session_state["clubes_seleccionados"].items() if activo]
+
+            # Mostrar resumen de selección
+            if len(clubes_activos) == len(clubes_unicos):
+                st.markdown("**Mostrando todos los clubes.**")
+            elif len(clubes_activos) == 0:
+                st.warning("No hay clubes seleccionados. No se muestran partidos.")
             else:
-                df_pendientes = df_pendientes.sort_values(ordenar_por, ascending=asc)
+                st.markdown(f"**Mostrando partidos de:** {', '.join(clubes_activos)}")
 
-            st.dataframe(df_pendientes[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
+            # Filtrar partidos
+            df_filtrado = df_pendientes[
+                df_pendientes["Local"].isin(clubes_activos) |
+                df_pendientes["Visitante"].isin(clubes_activos)
+            ].sort_values("Fecha")
+
+            # Mostrar tabla
+            st.dataframe(
+                df_filtrado[["Local", "Visitante", "Fecha y Hora"]],
+                hide_index=True,
+                use_container_width=True
+            )
 
             # ---------- Análisis por equipo ----------
             st.markdown("---")
             st.subheader("📈 Análisis por equipo")
 
             equipos = sorted(tabla_posiciones["Equipo"].unique())
-            equipo_sel = st.selectbox("Seleccioná un equipo", equipos)
+            # Seleccionar "UNIVERSITARIO" por defecto si existe, si no el primero.
+            default_index = equipos.index("UNIVERSITARIO") if "UNIVERSITARIO" in equipos else 0
+            equipo_sel = st.selectbox("Seleccioná un equipo", equipos, index=default_index)
 
             if equipo_sel:
                 # Partidos jugados por el equipo
                 jugados_equipo = df_jugados[(df_jugados["Local"] == equipo_sel) | (df_jugados["Visitante"] == equipo_sel)].copy()
                 
-                # Parseo de resultados
-                jugados_equipo["Puntos Equipo"] = jugados_equipo.apply(
-                    lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[0],
-                    axis=1
-                )
-                jugados_equipo["Puntos Rival"] = jugados_equipo.apply(
-                    lambda row: parse_resultado(row["ResultadoV"] if row["Local"] == equipo_sel else row["ResultadoL"])[0],
-                    axis=1
-                )
-                jugados_equipo["Pts Torneo"] = jugados_equipo.apply(
-                    lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[1],
-                    axis=1
-                )
+                if not jugados_equipo.empty: # Verificar si el equipo tiene partidos
+                    # Parseo de resultados
+                    jugados_equipo["Puntos Equipo"] = jugados_equipo.apply(
+                        lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[0],
+                        axis=1
+                    )
+                    jugados_equipo["Puntos Rival"] = jugados_equipo.apply(
+                        lambda row: parse_resultado(row["ResultadoV"] if row["Local"] == equipo_sel else row["ResultadoL"])[0],
+                        axis=1
+                    )
+                    jugados_equipo["Pts Torneo Equipo"] = jugados_equipo.apply(
+                        lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[1],
+                        axis=1
+                    )
 
-                # Cálculo de victorias, empates, derrotas
-                victorias = (jugados_equipo["Puntos Equipo"] > jugados_equipo["Puntos Rival"]).sum()
-                empates = (jugados_equipo["Puntos Equipo"] == jugados_equipo["Puntos Rival"]).sum()
-                derrotas = (jugados_equipo["Puntos Equipo"] < jugados_equipo["Puntos Rival"]).sum()
-                total = len(jugados_equipo)
+                    # Cálculo de victorias, empates, derrotas
+                    victorias = (jugados_equipo["Puntos Equipo"] > jugados_equipo["Puntos Rival"]).sum()
+                    empates = (jugados_equipo["Puntos Equipo"] == jugados_equipo["Puntos Rival"]).sum()
+                    derrotas = (jugados_equipo["Puntos Equipo"] < jugados_equipo["Puntos Rival"]).sum()
+                    total = len(jugados_equipo)
+                    
+                    puntos_totales_torneo_equipo = jugados_equipo["Pts Torneo Equipo"].sum()
+                    
+                    prom_puntos_favor = jugados_equipo['Puntos Equipo'].mean() if total > 0 else 0
+                    prom_puntos_contra = jugados_equipo['Puntos Rival'].mean() if total > 0 else 0
 
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("🏉 Partidos jugados", total)
-                    st.metric("✅ Ganados", f"{victorias} ({victorias/total:.0%})")
-                with col2:
-                    st.metric("🔢 Puntos en el torneo", jugados_equipo["Pts Torneo"].sum())
-                    st.metric("❌ Perdidos", f"{derrotas} ({derrotas/total:.0%})")
-                with col3:
-                    st.metric("📊 Prom. P. a Favor / P. en Contra", f"{jugados_equipo['Puntos Equipo'].mean():.1f} / {jugados_equipo['Puntos Rival'].mean():.1f}")
-                    st.metric("➖ Empatados", f"{empates} ({empates/total:.0%})")
+                    # Dividir en dos columnas principales: una para datos y otra para el gráfico
+                    col_datos, col_grafico = st.columns([0.6, 0.4]) 
 
-                # ---------- Gráfico de resultados de barras----------
-                fig1, ax1 = plt.subplots(figsize=(3, 3))  # más compacto
-                ax1.pie(
-                    [victorias, empates, derrotas],
-                    labels=["Ganados", "Empatados", "Perdidos"],
-                    autopct="%1.1f%%",
-                    startangle=90,
-                    colors=["#2ecc71", "#f1c40f", "#e74c3c"]
-                )
-                ax1.axis("equal")
-                st.pyplot(fig1)
+                    with col_datos:
+                        st.markdown(f"#### Estadísticas de {equipo_sel}")
+                        
+                        # Crear dos sub-columnas dentro de col_datos para las métricas
+                        sub_col_datos1, sub_col_datos2 = st.columns(2)
+
+                        with sub_col_datos1:
+                            st.metric("🏉 Partidos jugados", total)
+                            st.metric("🔢 Pts. torneo (bonus)", puntos_totales_torneo_equipo)
+                            st.metric("📊 Prom. P. Favor / Contra", f"{prom_puntos_favor:.1f} / {prom_puntos_contra:.1f}")
+                        
+                        with sub_col_datos2:
+                            st.metric("✅ Ganados", f"{victorias} ({victorias/total:.0%})" if total > 0 else "0 (0%)")
+                            st.metric("➖ Empatados", f"{empates} ({empates/total:.0%})" if total > 0 else "0 (0%)")
+                            st.metric("❌ Perdidos", f"{derrotas} ({derrotas/total:.0%})" if total > 0 else "0 (0%)")
+
+                    with col_grafico:
+                        st.markdown("#### Distribución de Resultados")
+                        if total > 0: 
+                            fig1, ax1 = plt.subplots(figsize=(3.5, 3.5))
+                            ax1.pie(
+                                [victorias, empates, derrotas],
+                                labels=["Ganados", "Empatados", "Perdidos"],
+                                autopct="%1.1f%%",
+                                startangle=90,
+                                colors=["#2ecc71", "#f1c40f", "#e74c3c"],
+                                wedgeprops={'edgecolor': 'white'} 
+                            )
+                            ax1.axis("equal") 
+                            st.pyplot(fig1)
+                        else:
+                            st.info("No hay partidos jugados para mostrar en el gráfico.")
+                else:
+                    st.info(f"No se encontraron partidos jugados para {equipo_sel}.")
 
 
 
@@ -439,7 +499,7 @@ if ano_nac_seleccionado_str:
 
                 # ---------- Predicción de partidos pendientes ----------
                 st.markdown("---")
-                st.subheader("🔮 Predicción de partidos pendientes")
+                st.subheader("🔮 La bola de cristal... puede fallar! (y lo va a hacer!)")
 
                 if df_pendientes.empty:
                     st.info("No hay partidos pendientes para mostrar predicciones.")
