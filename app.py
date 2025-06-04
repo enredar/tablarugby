@@ -335,7 +335,7 @@ if ano_nac_seleccionado_str:
             st.caption("💡 Navega entre las diferentes secciones haciendo clic en los títulos de abajo...")
           
             # Creamos las pestañas
-            tab1, tab2, tab3, tab4 = st.tabs(["📊 Tabla de Posiciones", "📅 Partidos Pendientes", "📈 Análisis por equipo", "🔮 La bola de cristal..."])
+            tab1, tab3, tab2, tab4 = st.tabs(["📊 Tabla de Posiciones", "📈 Análisis por equipo", "📅 Partidos Pendientes", "🔮 La bola de cristal..."])
             
             # --- TABLA DE POSICIONES ---
             with tab1:
