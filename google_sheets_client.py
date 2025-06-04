@@ -52,3 +52,18 @@ def get_available_birth_years(_spreadsheet_client: Spread) -> list[str]:
     except Exception as e:
         st.warning(f"No se pudieron obtener las divisiones (pestañas) de Google Sheets: {e}")
         return ["2010", "2009", "2008", "2011", "2012"]  # Fallback
+    
+@st.cache_data(ttl="10m", show_spinner="Cargando tarjetas...")
+def get_tarjetas_data(_spreadsheet_client: Spread, anio_nacimiento: str) -> pd.DataFrame:
+    """
+    Intenta obtener la hoja de tarjetas (e.g. 2010T) asociada al año de nacimiento.
+    Retorna un DataFrame vacío si no existe o hay error.
+    """
+    sheet_name = f"{anio_nacimiento}T"
+    try:
+        return _spreadsheet_client.sheet_to_df(sheet=sheet_name, index=None)
+    except gspread.exceptions.WorksheetNotFound:
+        return pd.DataFrame()  # No mostrar error, solo devolver vacío
+    except Exception as e:
+        st.warning(f"Error al cargar tarjetas para {anio_nacimiento}: {e}")
+        return pd.DataFrame()
