@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
-from google_sheets_client import get_gspread_client, get_division_data, get_available_birth_years
+from google_sheets_client import get_gspread_client, get_division_data, get_available_birth_years, get_tarjetas_data
  
 # ---------- Funciones auxiliares ----------
 
@@ -341,6 +341,7 @@ if ano_nac_seleccionado_str:
             with tab1:
                 df_jugados = df_raw_data[df_raw_data["Estado"].str.startswith("Cerrado")].copy()
                 st.subheader("📊 Tabla de posiciones")
+                st.markdown("&nbsp;") # This adds a small, non-breaking space
                 tabla_posiciones = procesar_partidos(df_jugados)
 
                 # Calcular altura dinámica (35 px por fila + 40 de margen por encabezado)
@@ -560,6 +561,39 @@ if ano_nac_seleccionado_str:
                         )
                     else:
                         st.info("Este equipo no tiene partidos pendientes.")
+
+                    # Cargar tarjetas si hay hoja disponible
+                    df_tarjetas = get_tarjetas_data(gs_client, ano_nac_seleccionado_str)
+
+                    # Filtrar tarjetas del equipo seleccionado
+                    df_tarjetas_equipo = df_tarjetas[df_tarjetas["Equipo"] == equipo_seleccionado]
+
+                    if not df_tarjetas_equipo.empty:
+                        st.subheader("🟨🟥 Incidencias disciplinarias")
+                        
+                        # Mostrar resumen rápido
+                        total_amarillas = df_tarjetas_equipo["Incidencia"].str.contains("amarilla", case=False).sum()
+                        total_rojas = df_tarjetas_equipo["Incidencia"].str.contains("roja", case=False).sum()
+                        total_azules = df_tarjetas_equipo["Incidencia"].str.contains("azul", case=False).sum()
+
+                        st.markdown(f"""
+                        - 🟨 **Total amarillas:** {total_amarillas}  
+                        - 🟥 **Total rojas:** {total_rojas}  
+                        - 🔵 **Total azules:** {total_azules}  
+                        """)
+
+                        # Mostrar tabla detallada
+                        st.dataframe(
+                            df_tarjetas_equipo[["Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle"]],
+                            use_container_width=True,
+                            hide_index=True,
+                            height=min(len(df_tarjetas_equipo) * 35 + 40, 600)  # Altura dinámica
+                        )
+                    else:
+                        st.info("Este equipo no tiene incidencias registradas.")
+
+
+
 
             # ---------- Predicción de partidos pendientes ----------
             with tab4:        
