@@ -335,8 +335,13 @@ if ano_nac_seleccionado_str:
             st.caption("💡 Navega entre las diferentes secciones haciendo clic en los títulos de abajo...")
           
             # Creamos las pestañas
-            tab1, tab3, tab2, tab4 = st.tabs(["📊 Tabla de Posiciones", "📈 Análisis por equipo", "📅 Partidos Pendientes", "🔮 La bola de cristal..."])
-            
+            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                "📊 Tabla de Posiciones", 
+                "📅 Partidos Pendientes", 
+                "📈 Análisis por equipo", 
+                "🔮 La bola de cristal...",
+                "🟦 Tabla de Tarjetas"
+            ])
             # --- TABLA DE POSICIONES ---
             with tab1:
                 df_jugados = df_raw_data[df_raw_data["Estado"].str.startswith("Cerrado")].copy()
@@ -678,6 +683,47 @@ if ano_nac_seleccionado_str:
                                 hide_index=True,
                                 use_container_width=True
                             )
+
+
+
+            with tab5:
+                df_tarjetas = get_tarjetas_data(gs_client, ano_nac_seleccionado_str)
+
+                if df_tarjetas.empty:
+                    st.info("No hay registros de tarjetas para esta división.")
+                else:
+                    st.subheader("🟨🟥🔵 Tarjetas por equipo")
+
+                    # Normalizamos las incidencias
+                    df_tarjetas["Incidencia"] = df_tarjetas["Incidencia"].str.lower()
+
+                    # Agrupamos y convertimos a tabla
+                    resumen = df_tarjetas.groupby("Equipo")["Incidencia"].value_counts().unstack(fill_value=0).reset_index()
+
+                    # Aseguramos que existan las columnas esperadas, incluso si no hay tarjetas de ese tipo
+                    for col in ["amarilla", "roja", "azul"]:
+                        if col not in resumen.columns:
+                            resumen[col] = 0
+
+                    # Renombramos para visualización
+                    resumen = resumen.rename(columns={
+                        "amarilla": "🟨 Amarillas",
+                        "roja": "🟥 Rojas",
+                        "azul": "🔵 Azules"
+                    })
+
+                    # Agregamos total
+                    resumen["🧮 Total"] = resumen[["🟨 Amarillas", "🟥 Rojas", "🔵 Azules"]].sum(axis=1)
+
+                    # Ordenamos
+                    resumen = resumen.sort_values(by="🧮 Total", ascending=False)
+
+                    st.dataframe(
+                        resumen,
+                        use_container_width=True,
+                        hide_index=True,
+                        height=min(len(resumen) * 35 + 40, 600)
+                    )
 
 else:
     st.info("Esperando que cargues un archivo CSV con los resultados.")
