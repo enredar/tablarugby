@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import re
 from google_sheets_client import get_gspread_client, get_division_data, get_available_birth_years, get_tarjetas_data
- 
+
 # ---------- Funciones auxiliares ----------
 
 def parse_resultado(resultado):
@@ -335,12 +335,12 @@ if ano_nac_seleccionado_str:
             st.caption("💡 Navega entre las diferentes secciones haciendo clic en los títulos de abajo...")
           
             # Creamos las pestañas
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            tab1, tab3, tab2, tab5, tab4 = st.tabs([
                 "📊 Tabla de Posiciones", 
-                "📅 Partidos Pendientes", 
                 "📈 Análisis por equipo", 
-                "🔮 La bola de cristal...",
-                "🟦 Tabla de Tarjetas"
+                "📅 Partidos Pendientes", 
+                "🟦 Tabla de Tarjetas",
+                "🔮 La bola de cristal..."
             ])
             # --- TABLA DE POSICIONES ---
             with tab1:
@@ -354,7 +354,6 @@ if ano_nac_seleccionado_str:
                 altura = int(filas * 35 + 40)
 
                 st.dataframe(tabla_posiciones, hide_index=True, use_container_width=True, height=altura)
-
 
             # --- PARTIDOS PENDIENTES ---
             with tab2:
@@ -592,13 +591,10 @@ if ano_nac_seleccionado_str:
                             df_tarjetas_equipo[["Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle"]],
                             use_container_width=True,
                             hide_index=True,
-                            height=min(len(df_tarjetas_equipo) * 35 + 40, 600)  # Altura dinámica
+                            height=min(len(df_tarjetas_equipo) * 35 + 40, 600),  # Altura dinámica
                         )
                     else:
                         st.info("Este equipo no tiene incidencias registradas.")
-
-
-
 
             # ---------- Predicción de partidos pendientes ----------
             with tab4:        
@@ -684,8 +680,7 @@ if ano_nac_seleccionado_str:
                                 use_container_width=True
                             )
 
-
-
+            # ---------- TABLA DE TARJETAS ----------
             with tab5:
                 df_tarjetas = get_tarjetas_data(gs_client, ano_nac_seleccionado_str)
 
