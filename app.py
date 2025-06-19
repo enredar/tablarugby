@@ -732,6 +732,17 @@ if ano_nac_seleccionado_str:
 else:
     st.info("Esperando que cargues un archivo CSV con los resultados.")
 
+st.markdown("---")  # Separador visual
 
+st.markdown(
+    """
+    <div style="font-size: 0.85rem; color: gray; text-align: center;">
+        ⚠️ Esta aplicación fue desarrollada con fines recreativos y de entretenimiento.<br>
+        Puede contener errores no intencionales y no representa una fuente oficial de datos.<br>
+        Para información oficial, por favor consultá directamente la base de datos de la <a href="https://bd.uar.com.ar" target="_blank">UAR</a>.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 # Cerramos el div que abrimos antes
 st.markdown("</div>", unsafe_allow_html=True)
