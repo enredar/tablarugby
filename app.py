@@ -676,12 +676,18 @@ if ano_nac_seleccionado_str:
                                 })
 
                             df_pred = pd.DataFrame(predicciones_list)
-                            st.markdown(f"**Mostrando predicciones para:** {', '.join(clubes_pred_activos)}")
-                            st.dataframe(
-                                df_pred[["Fecha y Hora", "Local", "Pred. Local", "Visitante", "Pred. Visitante"]],
-                                hide_index=True,
-                                use_container_width=True
-                            )
+
+                            columnas_esperadas = ["Fecha y Hora", "Local", "Pred. Local", "Visitante", "Pred. Visitante"]
+                            
+                            if not df_pred.empty and all(col in df_pred.columns for col in columnas_esperadas):
+                                st.markdown(f"**Mostrando predicciones para:** {', '.join(clubes_pred_activos)}")
+                                st.dataframe(
+                                    df_pred[columnas_esperadas],
+                                    hide_index=True,
+                                    use_container_width=True
+                                )
+                            else:
+                                st.info("No hay predicciones disponibles para mostrar.")
 
             # ---------- TABLA DE TARJETAS ----------
             with tab5:
