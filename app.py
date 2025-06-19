@@ -525,6 +525,9 @@ if ano_nac_seleccionado_str:
                     fig2.tight_layout()
 
                     st.pyplot(fig2)
+
+                    # Definir siempre esta variable, esté o no en partidos pendientes
+                    equipo_seleccionado = equipo_sel
                     # ---------- Mostrar partidos pendientes ----------
                     pendientes_equipo = df_pendientes[
                         (df_pendientes["Local"] == equipo_sel) | (df_pendientes["Visitante"] == equipo_sel)
