@@ -318,6 +318,11 @@ ano_nac_seleccionado_str = st.session_state.get("ano_nac_seleccionado_str", defa
 
 # --- Fin del bloque modificado ---
 
+# Reinicializar clubes_checklist si cambió la división
+if "estado_anno_anterior" not in st.session_state or st.session_state["estado_anno_anterior"] != ano_nac_seleccionado_str:
+    st.session_state["clubes_checklist"] = {}
+    st.session_state["estado_anno_anterior"] = ano_nac_seleccionado_str
+
 st.markdown("---")
 
 # --- Carga de Datos para la División Seleccionada ---
