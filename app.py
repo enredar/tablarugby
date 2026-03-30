@@ -591,12 +591,14 @@ if ano_nac_seleccionado_str:
                         y="Puntos",
                         color="Tipo",
                         markers=True,
+                        text="Puntos",
                         color_discrete_map={"A favor": "#3498db", "En contra": "#e74c3c"},
                         hover_data={"Etiqueta": False, "Tipo": False, "Rival": True, "Resultado": True}
                     )
                     
                     # Tooltip personalizado configurando el customdata entregado por hover_data
                     fig2.update_traces(
+                        textposition="top center",
                         hovertemplate='<b>%{x}</b><br>Puntos %{legendgroup}: %{y}<br>Rival: %{customdata[0]}<br>Resultado: %{customdata[1]}<extra></extra>'
                     )
 
