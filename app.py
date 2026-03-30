@@ -803,37 +803,88 @@ if ano_nac_seleccionado_str:
                 if df_tarjetas.empty:
                     st.info("No hay registros de tarjetas para esta división.")
                 else:
-                    st.subheader("🟨🟥🔵 Tarjetas por equipo")
+                    st.subheader("🟦 Tabla de Disciplina")
 
-                    # Normalizamos las incidencias
-                    df_tarjetas["Incidencia"] = df_tarjetas["Incidencia"].str.lower()
+                    # --- 1. Procesamiento de Datos ---
+                    df_tarjetas["Incidencia"] = df_tarjetas["Incidencia"].str.lower().str.strip()
+                    
+                    # Conteo total para KPIs de toda la división
+                    total_y = df_tarjetas[df_tarjetas["Incidencia"].str.contains("amarilla")].shape[0]
+                    total_r = df_tarjetas[df_tarjetas["Incidencia"].str.contains("roja")].shape[0]
+                    total_b = df_tarjetas[df_tarjetas["Incidencia"].str.contains("azul")].shape[0]
 
-                    # Agrupamos y convertimos a tabla
-                    resumen = df_tarjetas.groupby("Equipo")["Incidencia"].value_counts().unstack(fill_value=0).reset_index()
+                    # --- 2. Panel de Métricas ---
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("🟨 Amarillas Totales", total_y)
+                    m2.metric("🟥 Rojas Totales", total_r)
+                    m3.metric("🔵 Azules Totales", total_b)
 
-                    # Aseguramos que existan las columnas esperadas, incluso si no hay tarjetas de ese tipo
-                    for col in ["amarilla", "roja", "azul"]:
-                        if col not in resumen.columns:
-                            resumen[col] = 0
+                    # --- 3. Filtro por Club ---
+                    clubes_con_tarjetas = sorted(df_tarjetas["Equipo"].unique())
+                    clubes_sel = st.multiselect(
+                        "🔎 Filtrar por club (dejar vacío para ver todos):", 
+                        options=clubes_con_tarjetas, 
+                        default=[]
+                    )
+                    
+                    df_tarjetas_filt = df_tarjetas.copy()
+                    if clubes_sel:
+                        df_tarjetas_filt = df_tarjetas[df_tarjetas["Equipo"].isin(clubes_sel)]
 
-                    # Renombramos para visualización
-                    resumen = resumen.rename(columns={
-                        "amarilla": "🟨 Amarillas",
-                        "roja": "🟥 Rojas",
+                    # --- 4. Resumen por Equipo para visualización ---
+                    resumen = df_tarjetas_filt.groupby("Equipo")["Incidencia"].value_counts().unstack(fill_value=0).reset_index()
+                    
+                    # Asegurar que existan las columnas incluso si están en 0
+                    mapeo_columnas = {
+                        "amarilla": "🟨 Amarillas", 
+                        "roja": "🟥 Rojas", 
                         "azul": "🔵 Azules"
-                    })
+                    }
+                    
+                    for col_original, col_nueva in mapeo_columnas.items():
+                        if col_original not in resumen.columns:
+                            resumen[col_original] = 0
+                        resumen = resumen.rename(columns={col_original: col_nueva})
 
-                    # Agregamos total
-                    resumen["🧮 Total"] = resumen[["🟨 Amarillas", "🟥 Rojas", "🔵 Azules"]].sum(axis=1)
+                    # Ordenar por gravedad (Rojas valen más puntos en un ranking inverso de disciplina)
+                    resumen["_score"] = (resumen["🟨 Amarillas"] * 1) + (resumen["🟥 Rojas"] * 5) + (resumen["🔵 Azules"] * 2)
+                    resumen = resumen.sort_values("_score", ascending=False).drop(columns=["_score"])
 
-                    # Ordenamos
-                    resumen = resumen.sort_values(by="🧮 Total", ascending=False)
+                    # --- 5. Gráfico de Conducta (Plotly) ---
+                    st.markdown("#### Conducta por Club")
+                    if not resumen.empty:
+                        # Preparar datos para Plotly format largo
+                        columnas_cards = ["🟨 Amarillas", "🔵 Azules", "🟥 Rojas"]
+                        df_plot = resumen.melt(id_vars="Equipo", value_vars=columnas_cards, var_name="Tipo", value_name="Cantidad")
+                        
+                        fig_cards = px.bar(
+                            df_plot, 
+                            x="Cantidad", 
+                            y="Equipo", 
+                            color="Tipo",
+                            orientation='h',
+                            color_discrete_map={
+                                "🟨 Amarillas": "#f1c40f", 
+                                "🟥 Rojas": "#e74c3c", 
+                                "🔵 Azules": "#3498db"
+                            },
+                        )
+                        fig_cards.update_layout(
+                            barmode='stack', 
+                            yaxis={'categoryorder':'total ascending'},
+                            height=max(min(len(resumen) * 35 + 100, 600), 300),
+                            margin=dict(l=20, r=20, t=20, b=20),
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+                        st.plotly_chart(fig_cards, use_container_width=True)
 
+                    # --- 6. Tabla Detallada ---
+                    st.markdown("#### Detalle por Equipo")
                     st.dataframe(
                         resumen,
                         use_container_width=True,
                         hide_index=True,
-                        height=min(len(resumen) * 35 + 40, 600)
+                        height=min(len(resumen) * 35 + 40, 400)
                     )
 
 else:
