@@ -255,15 +255,23 @@ st.title("🏉 Tabla de Posiciones - Rugby Juveniles")
 # (get_gspread_client se cachea y solo se ejecuta una vez o cuando sea necesario)
 gs_client = get_gspread_client()
 
-# --- Selección de División (Año de Nacimiento) ---
-# Obtener dinámicamente los años/pestañas disponibles
+# --- Selección de División (Año de Nacimiento o Torneos) ---
+# Obtener dinámicamente las pestañas disponibles
 available_years_str = get_available_birth_years(gs_client)
-# Convertir a int para ordenar si son numéricos, luego a str para el selectbox
-try:
-    available_years_int = sorted([int(y) for y in available_years_str if y.isdigit()], reverse=True)
-    options_for_selectbox = [str(y) for y in available_years_int]
-except ValueError:
-    options_for_selectbox = sorted(available_years_str) # Si no son todos números, orden alfabético
+
+# Filtrar las hojas de tarjetas (las que terminan en 'T' si su contraparte existe)
+options_for_selectbox = [y for y in available_years_str if not (y.endswith("T") and y[:-1] in available_years_str)]
+
+# Función para ordenar: los numéricos primero en orden descendente, y luego el resto alfabéticamente
+def custom_sort(s):
+    import re
+    # Extraer el primer número que aparezca en el string para ordenar (ej. "2010 Clausura" -> 2010, "M19" -> 19)
+    match = re.search(r"(\d+)", s)
+    if match:
+        return (-int(match.group(1)), s)
+    return (0, s)
+
+options_for_selectbox = sorted(options_for_selectbox, key=custom_sort)
 
 # Año por defecto (ej. el más reciente o uno común)
 default_year = "2010" if "2010" in options_for_selectbox else (options_for_selectbox[0] if options_for_selectbox else None)
@@ -365,7 +373,8 @@ if ano_nac_seleccionado_str:
                 st.subheader("📅 Partidos pendientes")
 
                 df_pendientes = df_raw_data[df_raw_data["Estado"] == "Pendiente"].copy()
-                df_pendientes["Fecha"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce", dayfirst=True).dt.strftime('%d/%m/%Y %H:%M')
+                df_pendientes["Fecha_dt"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce", dayfirst=True)
+                df_pendientes["Fecha"] = df_pendientes["Fecha_dt"].dt.strftime('%d/%m/%Y %H:%M')
                 clubes_locales = df_pendientes["Local"].unique()
                 clubes_visitantes = df_pendientes["Visitante"].unique()
                 clubes_unicos = sorted(set(clubes_locales) | set(clubes_visitantes))
@@ -401,7 +410,7 @@ if ano_nac_seleccionado_str:
                 df_filtrado = df_pendientes[
                     df_pendientes["Local"].isin(clubes_activos) |
                     df_pendientes["Visitante"].isin(clubes_activos)
-                ].sort_values("Fecha")
+                ].sort_values("Fecha_dt")
 
                 # Calcular altura dinámica (35 px por fila + 40 de margen por encabezado)
                 filas = len(df_filtrado)
@@ -547,8 +556,8 @@ if ano_nac_seleccionado_str:
                         equipo_seleccionado = equipo_sel  # Asegurate de que esta variable tenga el nombre del equipo
 
                         # Convertir y formatear la fecha sin segundos
-                        pendientes_equipo["Fecha"] = pd.to_datetime(pendientes_equipo["Fecha y Hora"], errors="coerce", dayfirst=True)
-                        pendientes_equipo["Fecha"] = pendientes_equipo["Fecha"].dt.strftime('%d/%m/%Y %H:%M')
+                        pendientes_equipo["Fecha_dt"] = pd.to_datetime(pendientes_equipo["Fecha y Hora"], errors="coerce", dayfirst=True)
+                        pendientes_equipo["Fecha"] = pendientes_equipo["Fecha_dt"].dt.strftime('%d/%m/%Y %H:%M')
 
                         # Determinar rival y condición
                         pendientes_equipo["Rival"] = pendientes_equipo.apply(
@@ -559,8 +568,8 @@ if ano_nac_seleccionado_str:
                             lambda x: "Local" if x == equipo_seleccionado else "Visitante"
                         )
 
-                        # Ordenar por fecha
-                        pendientes_equipo = pendientes_equipo.sort_values("Fecha")
+                        # Ordenar por fecha_dt para que sea cronológico
+                        pendientes_equipo = pendientes_equipo.sort_values("Fecha_dt")
 
                         # Nombre dinámico para la columna
                         columna_condicion = f"{equipo_seleccionado} juega como"
