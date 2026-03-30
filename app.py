@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
 import re
 from google_sheets_client import get_gspread_client, get_division_data, get_available_birth_years, get_tarjetas_data
 
@@ -498,6 +499,7 @@ if ano_nac_seleccionado_str:
                         
                         prom_puntos_favor = jugados_equipo['Puntos Equipo'].mean() if total > 0 else 0
                         prom_puntos_contra = jugados_equipo['Puntos Rival'].mean() if total > 0 else 0
+                        dif_prom_partido = prom_puntos_favor - prom_puntos_contra
 
                         # Dividir en dos columnas principales: una para datos y otra para el gráfico
                         col_datos, col_grafico = st.columns([0.6, 0.4]) 
@@ -512,6 +514,8 @@ if ano_nac_seleccionado_str:
                                 st.metric("🏉 Partidos jugados", total)
                                 st.metric("🔢 Pts. torneo (bonus)", puntos_totales_torneo_equipo)
                                 st.metric("📊 Prom. P. Favor / Contra", f"{prom_puntos_favor:.1f} / {prom_puntos_contra:.1f}")
+                                # Nueva métrica con color dinámico usando delta de Streamlit
+                                st.metric("⚖️ Dif. Promedio por Partido", f"{dif_prom_partido:+.1f}", delta=f"{dif_prom_partido:+.1f}")
                             
                             with sub_col_datos2:
                                 st.metric("✅ Ganados", f"{victorias} ({victorias/total:.0%})" if total > 0 else "0 (0%)")
@@ -521,17 +525,30 @@ if ano_nac_seleccionado_str:
                         with col_grafico:
                             st.markdown("#### Distribución de Resultados")
                             if total > 0: 
-                                fig1, ax1 = plt.subplots(figsize=(3.5, 3.5))
-                                ax1.pie(
-                                    [victorias, empates, derrotas],
-                                    labels=["Ganados", "Empatados", "Perdidos"],
-                                    autopct="%1.1f%%",
-                                    startangle=90,
-                                    colors=["#2ecc71", "#f1c40f", "#e74c3c"],
-                                    wedgeprops={'edgecolor': 'white'} 
+                                # Gráfico interactivo con px.pie en lugar de plt
+                                df_pie = pd.DataFrame({
+                                    "Resultado": ["Ganados", "Empatados", "Perdidos"],
+                                    "Cantidad": [victorias, empates, derrotas]
+                                })
+                                # Filtramos para que no salgan porciones con valor 0
+                                df_pie = df_pie[df_pie["Cantidad"] > 0]
+                                
+                                fig1 = px.pie(
+                                    df_pie, 
+                                    values="Cantidad", 
+                                    names="Resultado",
+                                    color="Resultado",
+                                    color_discrete_map={"Ganados": "#2ecc71", "Empatados": "#95a5a6", "Perdidos": "#e74c3c"}
                                 )
-                                ax1.axis("equal") 
-                                st.pyplot(fig1)
+                                fig1.update_traces(
+                                    textinfo='percent+value',
+                                    hovertemplate='<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>'
+                                )
+                                fig1.update_layout(
+                                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                                    margin=dict(t=20, b=20, l=20, r=20)
+                                )
+                                st.plotly_chart(fig1, use_container_width=True)
                             else:
                                 st.info("No hay partidos jugados para mostrar en el gráfico.")
                     else:
@@ -548,37 +565,52 @@ if ano_nac_seleccionado_str:
                     jugados_equipo["Etiqueta"] = jugados_equipo.apply(
                         lambda row: f"{row['Rival']} ({row['Fecha'].strftime('%d/%m')})", axis=1
                     )
+                    # Columna customizada para alimentar el tooltip con el resultado real
+                    jugados_equipo["Resultado"] = jugados_equipo.apply(
+                        lambda row: f"{row['ResultadoL']} - {row['ResultadoV']}", axis=1
+                    )
 
-                    # Crear DataFrame para gráfico de barras agrupadas
-                    df_barras = pd.melt(
-                        jugados_equipo[["Etiqueta", "Puntos Equipo", "Puntos Rival"]],
-                        id_vars="Etiqueta",
+                    # Crear DataFrame para gráfico de líneas interactivo
+                    df_line = pd.melt(
+                        jugados_equipo[["Etiqueta", "Puntos Equipo", "Puntos Rival", "Rival", "Resultado", "Fecha"]],
+                        id_vars=["Etiqueta", "Rival", "Resultado", "Fecha"],
                         var_name="Tipo",
                         value_name="Puntos"
                     )
 
-                    # Renombrar los tipos
-                    df_barras["Tipo"] = df_barras["Tipo"].map({
+                    # Renombrar los tipos para la leyenda del gráfico
+                    df_line["Tipo"] = df_line["Tipo"].map({
                         "Puntos Equipo": "A favor",
                         "Puntos Rival": "En contra"
                     })
 
-                    # Gráfico de barras
-                    fig2, ax2 = plt.subplots(figsize=(10, 5))
-                    barplot = sns.barplot(data=df_barras, x="Etiqueta", y="Puntos", hue="Tipo", ax=ax2, palette=["#3498db", "#e74c3c"])
+                    # Gráfico de líneas con Plotly
+                    fig2 = px.line(
+                        df_line,
+                        x="Etiqueta",
+                        y="Puntos",
+                        color="Tipo",
+                        markers=True,
+                        color_discrete_map={"A favor": "#3498db", "En contra": "#e74c3c"},
+                        hover_data={"Etiqueta": False, "Tipo": False, "Rival": True, "Resultado": True}
+                    )
+                    
+                    # Tooltip personalizado configurando el customdata entregado por hover_data
+                    fig2.update_traces(
+                        hovertemplate='<b>%{x}</b><br>Puntos %{legendgroup}: %{y}<br>Rival: %{customdata[0]}<br>Resultado: %{customdata[1]}<extra></extra>'
+                    )
 
-                    # Agregar los valores encima de las barras
-                    for container in ax2.containers:
-                        ax2.bar_label(container, fmt="%.0f", label_type='edge', padding=3, fontsize=8)
+                    # Mejoras estéticas y layout de Plotly
+                    fig2.update_layout(
+                        title=dict(text=f"Evolución de Puntos por Partido - {equipo_sel}"),
+                        xaxis_title="Fecha y Rival",
+                        yaxis_title="Puntos",
+                        legend_title="Tipo",
+                        hovermode="x unified",
+                        margin=dict(t=50, b=40, l=40, r=20)
+                    )
 
-                    # Mejoras estéticas del eje X
-                    ax2.set_title(f"Puntos por partido - {equipo_sel}")
-                    ax2.set_ylabel("Puntos")
-                    ax2.set_xlabel("Rival (Fecha)")
-                    ax2.tick_params(axis='x', rotation=60, labelsize=8)
-                    fig2.tight_layout()
-
-                    st.pyplot(fig2)
+                    st.plotly_chart(fig2, use_container_width=True)
 
                     # Definir siempre esta variable, esté o no en partidos pendientes
                     equipo_seleccionado = equipo_sel
@@ -601,8 +633,9 @@ if ano_nac_seleccionado_str:
                             lambda row: row["Visitante"] if row["Local"] == equipo_seleccionado else row["Local"],
                             axis=1
                         )
+                        # Cambio visual de emojis para identificar Local / Visitante
                         pendientes_equipo["Condición"] = pendientes_equipo["Local"].apply(
-                            lambda x: "Local" if x == equipo_seleccionado else "Visitante"
+                            lambda x: "🏠 Local" if x == equipo_seleccionado else "✈️ Visitante"
                         )
 
                         # Ordenar por fecha_dt para que sea cronológico
