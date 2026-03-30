@@ -112,104 +112,97 @@ def procesar_partidos(df):
 def predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_resultado):
     """
     Predice el resultado de un partido entre local y visitante.
-    Considera rendimiento promedio, dificultad de rivales y historial entre equipos.
+    Considera rendimiento promedio ponderado por recencia, dificultad de rivales,
+    historial directo entre equipos y ventaja de localía.
 
     Args:
         local (str): nombre del equipo local.
         visitante (str): nombre del equipo visitante.
-        tabla_posiciones (DataFrame): incluye columnas ['Equipo', 'PJ', 'PTS']. (PTS = Puntos de Torneo)
+        tabla_posiciones (DataFrame): incluye columnas ['Equipo', 'PJ', 'PTS'].
         df_jugados (DataFrame): incluye columnas ['Local', 'Visitante', 'ResultadoL', 'ResultadoV'].
         parse_resultado (function): Función para parsear los resultados.
 
     Returns:
-        Tuple[int, int] or Tuple[None, None]: puntos esperados (local, visitante).
+        dict or None: Diccionario con predicción, confianza y factores, o None si no se puede predecir.
     """
+
+    # --- Constantes del modelo ---
+    RECENCY_DECAY = 0.85       # Cada partido anterior pierde ~15% de peso
+    HOME_ADVANTAGE = 1.05      # 5% bonus al equipo local
+    SOS_SENSITIVITY = 0.15     # Sensibilidad del ajuste por dificultad de rivales
 
     # --- Paso 1: Filtrar partidos jugados de cada equipo ---
     partidos_local = df_jugados[(df_jugados["Local"] == local) | (df_jugados["Visitante"] == local)].copy()
     partidos_visitante = df_jugados[(df_jugados["Local"] == visitante) | (df_jugados["Visitante"] == visitante)].copy()
 
     if partidos_local.empty or partidos_visitante.empty:
-        # Si un equipo no tiene historial, no se puede predecir con este método.
-        # Podrías devolver (None, None) o una predicción basada en promedios de liga si los tuvieras.
-        return None, None
+        return None
 
-    # --- Paso 2: Calcular promedios PF y PC por equipo ---
+    # --- Paso 2: Calcular promedios PF y PC con ponderación por recencia ---
     def calc_promedios(partidos, equipo):
         puntos_favor = []
         puntos_contra = []
-        rivales_enfrentados = [] # Cambiado de 'rivales' para evitar confusión de nombres
+        rivales_enfrentados = []
 
         for _, row in partidos.iterrows():
-            es_local_actual = row["Local"] == equipo # Si el 'equipo' fue local en este partido histórico
+            es_local_actual = row["Local"] == equipo
             rival = row["Visitante"] if es_local_actual else row["Local"]
             resultado_equipo_str = row["ResultadoL"] if es_local_actual else row["ResultadoV"]
             resultado_rival_str = row["ResultadoV"] if es_local_actual else row["ResultadoL"]
 
-            pf, _ = parse_resultado(resultado_equipo_str) # Usamos el primer valor (puntos del partido)
-            pc, _ = parse_resultado(resultado_rival_str)  # Usamos el primer valor
+            pf, _ = parse_resultado(resultado_equipo_str)
+            pc, _ = parse_resultado(resultado_rival_str)
 
             if pf is not None and pc is not None:
                 puntos_favor.append(pf)
                 puntos_contra.append(pc)
                 rivales_enfrentados.append(rival)
 
-        pf_avg = np.mean(puntos_favor) if puntos_favor else 0
-        pc_avg = np.mean(puntos_contra) if puntos_contra else 0
+        # Ponderación por recencia: decaimiento exponencial
+        # Los partidos más recientes (últimos en la lista) pesan más
+        n = len(puntos_favor)
+        if n > 0:
+            weights = np.array([RECENCY_DECAY ** (n - 1 - i) for i in range(n)])
+            weights /= weights.sum()
+            pf_avg = float(np.average(puntos_favor, weights=weights))
+            pc_avg = float(np.average(puntos_contra, weights=weights))
+            pf_std = float(np.sqrt(np.average((np.array(puntos_favor) - pf_avg) ** 2, weights=weights)))
+        else:
+            pf_avg, pc_avg, pf_std = 0, 0, 0
 
-        return pf_avg, pc_avg, rivales_enfrentados
+        return pf_avg, pc_avg, rivales_enfrentados, pf_std
 
-    pf_local, pc_local, rivales_local_enfrentados = calc_promedios(partidos_local, local)
-    pf_visitante, pc_visitante, rivales_visitante_enfrentados = calc_promedios(partidos_visitante, visitante)
+    pf_local, pc_local, rivales_local_enfrentados, std_local = calc_promedios(partidos_local, local)
+    pf_visitante, pc_visitante, rivales_visitante_enfrentados, std_visitante = calc_promedios(partidos_visitante, visitante)
 
     # --- Paso 3: Ponderar por Dificultad de Rivales (Strength of Schedule - SoS) ---
-    
-    # Estimar el TPG (Tournament Points Per Game) promedio de la liga
-    # Esto es crucial para tener un baseline correcto.
     equipos_con_partidos = tabla_posiciones[tabla_posiciones['PJ'] > 0]
     if not equipos_con_partidos.empty:
-        league_avg_tpg = np.mean(equipos_con_partidos['PTS'] / equipos_con_partidos['PJ'])
+        league_avg_tpg = float(np.mean(equipos_con_partidos['PTS'] / equipos_con_partidos['PJ']))
     else:
-        league_avg_tpg = 2.2  # Fallback: Estimación (ajusta según tu liga. Ej: (4pts victoria * 50% + 1pt bonus) ~ 2.0-2.5)
+        league_avg_tpg = 2.2
 
-    def get_avg_tpg_of_opponents(rivales_list, tabla_pos, default_tpg_for_missing_rival):
-        tpg_values_of_rivals = []
+    def get_avg_tpg_of_opponents(rivales_list, tabla_pos, default_tpg):
+        tpg_values = []
         for r_name in rivales_list:
             fila_rival = tabla_pos[tabla_pos["Equipo"] == r_name]
             if not fila_rival.empty and fila_rival["PJ"].values[0] > 0:
-                tpg_rival = fila_rival["PTS"].values[0] / fila_rival["PJ"].values[0]
-                tpg_values_of_rivals.append(tpg_rival)
-        
-        # Si no hay rivales con estadísticas, o la lista de rivales está vacía,
-        # se asume que el equipo jugó contra oponentes de fuerza promedio de la liga.
-        return np.mean(tpg_values_of_rivals) if tpg_values_of_rivals else default_tpg_for_missing_rival
+                tpg_values.append(fila_rival["PTS"].values[0] / fila_rival["PJ"].values[0])
+        return float(np.mean(tpg_values)) if tpg_values else default_tpg
 
-    # TPG promedio de los oponentes que 'local' ha enfrentado
     tpg_opp_local = get_avg_tpg_of_opponents(rivales_local_enfrentados, tabla_posiciones, league_avg_tpg)
-    # TPG promedio de los oponentes que 'visitante' ha enfrentado
     tpg_opp_visitante = get_avg_tpg_of_opponents(rivales_visitante_enfrentados, tabla_posiciones, league_avg_tpg)
 
-    # Sensibilidad del ajuste por SoS. Un valor más bajo significa un ajuste menor.
-    # Originalmente tenías 0.5, que es muy alto. Prueba con 0.1 o 0.15.
-    sos_sensitivity = 0.15 
-
-    # Factor de ajuste: >1 si jugó un calendario más difícil, <1 si fue más fácil.
-    # Este factor ajusta la "calidad percibida" del equipo basada en su calendario.
-    ajuste_local_raw = 1.0 + (tpg_opp_local - league_avg_tpg) * sos_sensitivity
-    ajuste_visitante_raw = 1.0 + (tpg_opp_visitante - league_avg_tpg) * sos_sensitivity
-    
-    # Limitar los ajustes para evitar valores extremos (ej., +/- 30% como máximo)
-    # Un equipo no se vuelve el doble de bueno/malo solo por el calendario.
+    ajuste_local_raw = 1.0 + (tpg_opp_local - league_avg_tpg) * SOS_SENSITIVITY
+    ajuste_visitante_raw = 1.0 + (tpg_opp_visitante - league_avg_tpg) * SOS_SENSITIVITY
     ajuste_local = max(0.7, min(ajuste_local_raw, 1.3))
     ajuste_visitante = max(0.7, min(ajuste_visitante_raw, 1.3))
 
-    # --- Paso 4: Incorporar historial entre ellos como sesgo (Bias) ---
-    # Esta parte parece razonable como está. Es un ajuste aditivo.
+    # --- Paso 4: Historial directo como sesgo ---
     historial = df_jugados[
         ((df_jugados["Local"] == local) & (df_jugados["Visitante"] == visitante)) |
-        ((df_jugados["Local"] == visitante) & (df_jugados["Visitante"] == local)) # Corregido: Visitante == local para el segundo caso
-    ].copy() # Añadido .copy() para evitar SettingWithCopyWarning si se modifica historial (no es el caso aquí, pero buena práctica)
-
+        ((df_jugados["Local"] == visitante) & (df_jugados["Visitante"] == local))
+    ].copy()
 
     sesgo_local = 0
     sesgo_visitante = 0
@@ -217,51 +210,80 @@ def predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_res
         pf_hist_local_list = []
         pf_hist_visitante_list = []
         for _, row in historial.iterrows():
-            # Asumiendo que ResultadoL/V son los scores del partido, no strings con bonus
             pf_l_hist, _ = parse_resultado(row["ResultadoL"])
             pf_v_hist, _ = parse_resultado(row["ResultadoV"])
-
             if pf_l_hist is not None and pf_v_hist is not None:
-                if row["Local"] == local: # 'local' de la predicción fue Local en este partido histórico
+                if row["Local"] == local:
                     pf_hist_local_list.append(pf_l_hist)
                     pf_hist_visitante_list.append(pf_v_hist)
-                else: # 'local' de la predicción fue Visitante en este partido histórico (o sea, 'visitante' fue Local)
+                else:
                     pf_hist_local_list.append(pf_v_hist)
                     pf_hist_visitante_list.append(pf_l_hist)
         
-        # El sesgo es cuánto más/menos anota el equipo contra ESTE rival en particular,
-        # comparado con su promedio general.
-        if pf_hist_local_list: # Si hay historial, calcular el promedio de PF del equipo local en esos partidos
-            avg_pf_local_vs_visitante = np.mean(pf_hist_local_list)
-            sesgo_local = avg_pf_local_vs_visitante - pf_local
-        
-        if pf_hist_visitante_list: # Si hay historial, calcular el promedio de PF del equipo visitante en esos partidos
-            avg_pf_visitante_vs_local = np.mean(pf_hist_visitante_list)
-            sesgo_visitante = avg_pf_visitante_vs_local - pf_visitante
+        if pf_hist_local_list:
+            sesgo_local = np.mean(pf_hist_local_list) - pf_local
+        if pf_hist_visitante_list:
+            sesgo_visitante = np.mean(pf_hist_visitante_list) - pf_visitante
 
-
-    # --- Paso 5: Predicción Final (Aplicando Ajustes Refinados) ---
-
-    # PF ajustado: si ajuste > 1 (calendario difícil), el equipo es "mejor" de lo que parece, PF sube.
-    # PC ajustado: si ajuste > 1 (calendario difícil), el equipo es "mejor", PC baja (concede menos).
-    
+    # --- Paso 5: Predicción Final ---
     adj_pf_local = pf_local * ajuste_local
-    # Si ajuste_local es 0 (evitado por el cap), pc_local se mantendría. El cap [0.7, 1.3] lo previene.
-    adj_pc_local = pc_local / ajuste_local 
-
+    adj_pc_local = pc_local / ajuste_local
     adj_pf_visitante = pf_visitante * ajuste_visitante
     adj_pc_visitante = pc_visitante / ajuste_visitante
 
-    # Predicción base: Promedio del ataque ajustado de un equipo y la defensa ajustada del otro.
     pred_local_base = (adj_pf_local + adj_pc_visitante) / 2
     pred_visitante_base = (adj_pf_visitante + adj_pc_local) / 2
 
-    # Aplicar el sesgo del historial directo
+    # --- Paso 5b: Factor de Localía ---
+    pred_local_base *= HOME_ADVANTAGE
+    pred_visitante_base /= HOME_ADVANTAGE
+
+    # Aplicar sesgo histórico
     pred_l_final = round(pred_local_base + sesgo_local)
     pred_v_final = round(pred_visitante_base + sesgo_visitante)
+    pred_l_final = max(0, int(pred_l_final))
+    pred_v_final = max(0, int(pred_v_final))
 
-    # No permitir negativos y asegurar que sean enteros
-    return max(0, int(pred_l_final)), max(0, int(pred_v_final))
+    # --- Paso 6: Cálculo de Confianza ---
+    n_local = len(partidos_local)
+    n_visitante = len(partidos_visitante)
+    min_partidos = min(n_local, n_visitante)
+
+    # Base por cantidad de datos (0-50 pts)
+    conf_datos = min(min_partidos * 10, 50)
+
+    # Bonus por historial directo (0-20 pts)
+    conf_hist = min(len(historial) * 10, 20)
+
+    # Bonus por consistencia: baja varianza = alta confianza (0-30 pts)
+    avg_std = (std_local + std_visitante) / 2
+    # Normalizar: std=0 → 30pts, std=20 → 0pts
+    conf_consist = max(0, int(30 * (1 - min(avg_std / 20, 1))))
+
+    confianza_pct = min(conf_datos + conf_hist + conf_consist, 100)
+    if confianza_pct >= 70:
+        nivel_confianza = "🟢 Alta"
+    elif confianza_pct >= 40:
+        nivel_confianza = "🟡 Media"
+    else:
+        nivel_confianza = "🔴 Baja"
+
+    return {
+        "pred_local": pred_l_final,
+        "pred_visitante": pred_v_final,
+        "confianza": confianza_pct,
+        "nivel_confianza": nivel_confianza,
+        "factores": {
+            "sos_local": round(ajuste_local, 3),
+            "sos_visitante": round(ajuste_visitante, 3),
+            "localía": HOME_ADVANTAGE,
+            "sesgo_hist_local": round(sesgo_local, 1),
+            "sesgo_hist_visitante": round(sesgo_visitante, 1),
+            "partidos_local": n_local,
+            "partidos_visitante": n_visitante,
+            "historial_directo": len(historial),
+        }
+    }
 
 
 st.set_page_config(page_title="Rugby Juveniles", layout="wide")
@@ -710,91 +732,271 @@ if ano_nac_seleccionado_str:
             with tab4:        
                     st.subheader("🔮 La bola de cristal... puede fallar! (y lo va a hacer!)")
 
+                    # --- Explicación del modelo ---
+                    with st.expander("📖 ¿Cómo funciona el modelo?"):
+                        st.markdown("""
+                        El modelo de predicción combina **4 factores** para estimar el resultado:
+
+                        1. **📊 Promedio Ponderado por Recencia** — Los últimos partidos pesan más que los primeros del año (decay: 0.85).
+                        2. **💪 Dificultad de Rivales (SoS)** — Si un equipo le ganó a rivales fuertes, su poder predictivo sube.
+                        3. **🤝 Historial Directo** — Si los equipos ya jugaron entre sí, el modelo ajusta según ese comportamiento específico.
+                        4. **🏠 Ventaja de Localía** — El equipo local recibe un bonus del ~5%.
+
+                        **Confianza**: Se calcula según la cantidad de datos disponibles, consistencia de resultados e historial directo.
+                        """)
+
                     if df_pendientes.empty:
                         st.info("No hay partidos pendientes para mostrar predicciones.")
                     elif df_jugados.empty:
                         st.warning("No hay datos de partidos jugados (cerrados). No se pueden generar predicciones detalladas.")
                         st.dataframe(df_pendientes[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
                     else:
-                        st.markdown("**🔍 Filtrado de partidos para predicción**")
+                        clubes_locales_pred = df_pendientes["Local"].unique()
+                        clubes_visitantes_pred = df_pendientes["Visitante"].unique()
+                        clubes_unicos_pred = sorted(set(clubes_locales_pred) | set(clubes_visitantes_pred))
 
-                        clubes_locales = df_pendientes["Local"].unique()
-                        clubes_visitantes = df_pendientes["Visitante"].unique()
-                        clubes_unicos = sorted(set(clubes_locales) | set(clubes_visitantes))
+                        # --- Filtro con multiselect ---
+                        clubes_pred_activos = st.multiselect(
+                            "🔎 Filtrar clubes para predicción (dejá vacío para ver todos):",
+                            options=clubes_unicos_pred,
+                            default=[],
+                            key="multiselect_pred_clubes"
+                        )
 
-                        # Inicializar estado de selección si no existe
-                        if "clubes_checklist_pred" not in st.session_state:
-                            st.session_state["clubes_checklist_pred"] = {club: False for club in clubes_unicos}
-
-                        if "seleccion_pred_todos" not in st.session_state:
-                            st.session_state["seleccion_pred_todos"] = False  # default: ninguno seleccionado
-
-                        with st.expander("✅ Elegí los clubes para predecir (ninguno seleccionado por defecto)"):
-                            col_button, _ = st.columns([1, 3])
-                            accion = "Seleccionar todos" if not all(st.session_state["clubes_checklist_pred"].values()) else "Deseleccionar todos"
-                            if col_button.button(accion, key="boton_toggle_pred"):
-                                nuevo_estado = not all(st.session_state["clubes_checklist_pred"].values())
-                                for club in clubes_unicos:
-                                    st.session_state["clubes_checklist_pred"][club] = nuevo_estado
-
-                        # Inicializar si no existe
-                        if "clubes_checklist_pred" not in st.session_state:
-                            st.session_state["clubes_checklist_pred"] = {}
-
-                        # Asegurarse de que todos los clubes estén presentes en el diccionario
-                        for club in clubes_unicos:
-                            if club not in st.session_state["clubes_checklist_pred"]:
-                                st.session_state["clubes_checklist_pred"][club] = True
-
-                        # Mostrar los checkboxes
-                        cols = st.columns(3)
-                        for i, club in enumerate(clubes_unicos):
-                            col = cols[i % 3]
-                            st.session_state["clubes_checklist_pred"][club] = col.checkbox(
-                                club,
-                                value=st.session_state["clubes_checklist_pred"][club],
-                                key=f"check_pred_{club}"
-                            )
-
-                        # Filtrado activo
-                        clubes_pred_activos = [
-                            club for club, activo in st.session_state["clubes_checklist_pred"].items() if activo
-                        ]
-
+                        # Si no seleccionó ninguno, mostrar todos
                         if not clubes_pred_activos:
-                            st.info("Seleccioná uno o más clubes para mostrar las predicciones.")
+                            clubes_pred_activos = clubes_unicos_pred
+
+                        df_pendientes_filtrados = df_pendientes[
+                            df_pendientes["Local"].isin(clubes_pred_activos) |
+                            df_pendientes["Visitante"].isin(clubes_pred_activos)
+                        ].copy()
+                        df_pendientes_filtrados["Fecha_dt"] = pd.to_datetime(df_pendientes_filtrados["Fecha y Hora"], errors="coerce", dayfirst=True)
+                        df_pendientes_filtrados = df_pendientes_filtrados.sort_values("Fecha_dt")
+
+                        # --- Generar predicciones ---
+                        predicciones_list = []
+                        for _, row in df_pendientes_filtrados.iterrows():
+                            local_eq = row["Local"]
+                            visitante_eq = row["Visitante"]
+                            resultado = predecir_resultado(local_eq, visitante_eq, tabla_posiciones, df_jugados, parse_resultado)
+                            predicciones_list.append({
+                                "fecha_raw": row["Fecha y Hora"],
+                                "fecha_dt": row.get("Fecha_dt"),
+                                "local": local_eq,
+                                "visitante": visitante_eq,
+                                "resultado": resultado
+                            })
+
+                        if not predicciones_list:
+                            st.info("No hay predicciones disponibles para mostrar.")
                         else:
-                            df_pendientes_filtrados = df_pendientes[
-                                df_pendientes["Local"].isin(clubes_pred_activos) |
-                                df_pendientes["Visitante"].isin(clubes_pred_activos)
-                            ].sort_values("Fecha")
+                            # --- Panel KPI ---
+                            total_pred = len(predicciones_list)
+                            pred_validas = [p for p in predicciones_list if p["resultado"] is not None]
+                            fav_local = sum(1 for p in pred_validas if p["resultado"]["pred_local"] > p["resultado"]["pred_visitante"])
+                            avg_conf = np.mean([p["resultado"]["confianza"] for p in pred_validas]) if pred_validas else 0
+                            pct_local_fav = (fav_local / len(pred_validas) * 100) if pred_validas else 0
 
-                            predicciones_list = []
-                            for _, row in df_pendientes_filtrados.iterrows():
-                                local = row["Local"]
-                                visitante = row["Visitante"]
-                                pred_l, pred_v = predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_resultado)
-                                predicciones_list.append({
-                                    "Fecha y Hora": row["Fecha y Hora"],
-                                    "Local": local,
-                                    "Pred. Local": pred_l if pred_l is not None else "N/A",
-                                    "Visitante": visitante,
-                                    "Pred. Visitante": pred_v if pred_v is not None else "N/A"
-                                })
+                            kpi1, kpi2, kpi3 = st.columns(3)
+                            kpi1.metric("🔮 Predicciones", total_pred)
+                            kpi2.metric("🏠 Favoritos Locales", f"{pct_local_fav:.0f}%")
+                            kpi3.metric("📈 Confianza Promedio", f"{avg_conf:.0f}%")
 
-                            df_pred = pd.DataFrame(predicciones_list)
+                            st.markdown("---")
 
-                            columnas_esperadas = ["Fecha y Hora", "Local", "Pred. Local", "Visitante", "Pred. Visitante"]
-                            
-                            if not df_pred.empty and all(col in df_pred.columns for col in columnas_esperadas):
-                                st.markdown(f"**Mostrando predicciones para:** {', '.join(clubes_pred_activos)}")
-                                st.dataframe(
-                                    df_pred[columnas_esperadas],
-                                    hide_index=True,
-                                    use_container_width=True
-                                )
-                            else:
-                                st.info("No hay predicciones disponibles para mostrar.")
+                            # --- Días en español ---
+                            dias_es = {
+                                "Monday": "Lunes", "Tuesday": "Martes", "Wednesday": "Miércoles",
+                                "Thursday": "Jueves", "Friday": "Viernes", "Saturday": "Sábado", "Sunday": "Domingo"
+                            }
+
+                            # --- CSS para Match Cards ---
+                            st.markdown("""
+                            <style>
+                            .match-card {
+                                background: linear-gradient(135deg, rgba(30,30,50,0.6) 0%, rgba(40,40,70,0.4) 100%);
+                                border: 1px solid rgba(255,255,255,0.08);
+                                border-radius: 12px;
+                                padding: 1.2rem 1.5rem;
+                                margin-bottom: 1rem;
+                                backdrop-filter: blur(10px);
+                            }
+                            .match-date {
+                                font-size: 0.8rem;
+                                color: rgba(255,255,255,0.5);
+                                margin-bottom: 0.5rem;
+                            }
+                            .match-teams {
+                                display: flex;
+                                align-items: center;
+                                justify-content: space-between;
+                                margin-bottom: 0.6rem;
+                            }
+                            .team-name {
+                                font-size: 1.05rem;
+                                font-weight: 600;
+                                flex: 1;
+                            }
+                            .team-local { text-align: left; }
+                            .team-visitante { text-align: right; }
+                            .match-score {
+                                font-size: 1.6rem;
+                                font-weight: 800;
+                                text-align: center;
+                                min-width: 100px;
+                                letter-spacing: 2px;
+                            }
+                            .score-favorito { color: #2ecc71; }
+                            .score-perdedor { color: rgba(255,255,255,0.5); }
+                            .score-empate { color: #f39c12; }
+                            .match-bar-container {
+                                width: 100%;
+                                height: 6px;
+                                background: rgba(255,255,255,0.08);
+                                border-radius: 3px;
+                                overflow: hidden;
+                                margin-bottom: 0.5rem;
+                            }
+                            .match-bar-local {
+                                height: 100%;
+                                border-radius: 3px 0 0 3px;
+                                float: left;
+                            }
+                            .match-footer {
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                font-size: 0.78rem;
+                                color: rgba(255,255,255,0.45);
+                            }
+                            .conf-badge {
+                                padding: 2px 10px;
+                                border-radius: 10px;
+                                font-size: 0.75rem;
+                                font-weight: 600;
+                            }
+                            .conf-alta { background: rgba(46,204,113,0.15); color: #2ecc71; }
+                            .conf-media { background: rgba(241,196,15,0.15); color: #f1c40f; }
+                            .conf-baja { background: rgba(231,76,60,0.15); color: #e74c3c; }
+                            .na-card {
+                                background: rgba(30,30,50,0.3);
+                                border: 1px dashed rgba(255,255,255,0.1);
+                                border-radius: 12px;
+                                padding: 1rem 1.5rem;
+                                margin-bottom: 1rem;
+                                color: rgba(255,255,255,0.4);
+                            }
+                            </style>
+                            """, unsafe_allow_html=True)
+
+                            # --- Renderizar Match Cards ---
+                            for pred_data in predicciones_list:
+                                resultado = pred_data["resultado"]
+                                local_eq = pred_data["local"]
+                                visitante_eq = pred_data["visitante"]
+
+                                # Formatear fecha
+                                fecha_dt = pred_data["fecha_dt"]
+                                if pd.notna(fecha_dt):
+                                    dia_nombre = dias_es.get(fecha_dt.strftime("%A"), "")
+                                    fecha_str = f"📅 {dia_nombre} {fecha_dt.strftime('%d/%m/%Y %H:%M')}"
+                                else:
+                                    fecha_str = f"📅 {pred_data['fecha_raw']}"
+
+                                if resultado is None:
+                                    # Card para predicciones no disponibles
+                                    st.markdown(f"""
+                                    <div class="na-card">
+                                        <div class="match-date">{fecha_str}</div>
+                                        <div class="match-teams">
+                                            <span class="team-name team-local">🏠 {local_eq}</span>
+                                            <span class="match-score" style="color: rgba(255,255,255,0.3);">? — ?</span>
+                                            <span class="team-name team-visitante">{visitante_eq} ✈️</span>
+                                        </div>
+                                        <div class="match-footer">
+                                            <span>Sin datos suficientes para predecir</span>
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                    continue
+
+                                pred_l = resultado["pred_local"]
+                                pred_v = resultado["pred_visitante"]
+                                confianza = resultado["confianza"]
+                                nivel = resultado["nivel_confianza"]
+                                factores = resultado["factores"]
+
+                                # Determinar favorito y colores de score
+                                total_pts = max(pred_l + pred_v, 1)
+                                pct_local = pred_l / total_pts * 100
+
+                                if pred_l > pred_v:
+                                    score_l_class = "score-favorito"
+                                    score_v_class = "score-perdedor"
+                                    fav_text = f"← Favorito"
+                                elif pred_v > pred_l:
+                                    score_l_class = "score-perdedor"
+                                    score_v_class = "score-favorito"
+                                    fav_text = f"Favorito →"
+                                else:
+                                    score_l_class = "score-empate"
+                                    score_v_class = "score-empate"
+                                    fav_text = "Parejo"
+
+                                # Color de barra
+                                bar_local_color = "#2ecc71" if pred_l >= pred_v else "#e74c3c"
+                                bar_visit_color = "#e74c3c" if pred_l >= pred_v else "#2ecc71"
+
+                                # Clase de confianza
+                                if confianza >= 70:
+                                    conf_class = "conf-alta"
+                                elif confianza >= 40:
+                                    conf_class = "conf-media"
+                                else:
+                                    conf_class = "conf-baja"
+
+                                # Renderizar card
+                                st.markdown(f"""
+                                <div class="match-card">
+                                    <div class="match-date">{fecha_str}</div>
+                                    <div class="match-teams">
+                                        <span class="team-name team-local">🏠 {local_eq}</span>
+                                        <span class="match-score">
+                                            <span class="{score_l_class}">{pred_l}</span>
+                                            <span style="color: rgba(255,255,255,0.25); margin: 0 4px;">—</span>
+                                            <span class="{score_v_class}">{pred_v}</span>
+                                        </span>
+                                        <span class="team-name team-visitante">{visitante_eq} ✈️</span>
+                                    </div>
+                                    <div class="match-bar-container">
+                                        <div class="match-bar-local" style="width: {pct_local:.1f}%; background: linear-gradient(90deg, {bar_local_color}, {bar_visit_color});"></div>
+                                    </div>
+                                    <div class="match-footer">
+                                        <span>{fav_text}</span>
+                                        <span class="conf-badge {conf_class}">{nivel} ({confianza}%)</span>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+
+                                # Expander con detalles del modelo
+                                with st.expander(f"📊 Detalles: {local_eq} vs {visitante_eq}"):
+                                    det1, det2 = st.columns(2)
+                                    with det1:
+                                        st.markdown(f"""
+                                        **🏠 {local_eq}**
+                                        - SoS: `{factores['sos_local']}`
+                                        - Sesgo histórico: `{factores['sesgo_hist_local']:+.1f}`
+                                        - Partidos jugados: `{factores['partidos_local']}`
+                                        """)
+                                    with det2:
+                                        st.markdown(f"""
+                                        **✈️ {visitante_eq}**
+                                        - SoS: `{factores['sos_visitante']}`
+                                        - Sesgo histórico: `{factores['sesgo_hist_visitante']:+.1f}`
+                                        - Partidos jugados: `{factores['partidos_visitante']}`
+                                        """)
+                                    st.caption(f"📌 Localía: {factores['localía']}x | Enfrentamientos directos: {factores['historial_directo']}")
 
             # ---------- TABLA DE TARJETAS ----------
             with tab5:
