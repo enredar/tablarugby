@@ -864,12 +864,13 @@ if ano_nac_seleccionado_str:
                             color="Tipo",
                             orientation='h',
                             color_discrete_map={
-                                "🟨 Amarillas": "#f1c40f", 
+                                "🟨 Amarillas": "#D4AF37", 
                                 "🟥 Rojas": "#e74c3c", 
                                 "🔵 Azules": "#3498db"
                             },
                         )
                         fig_cards.update_layout(
+                            xaxis={'tickformat': 'd', 'dtick': 1},
                             barmode='stack', 
                             yaxis={'categoryorder':'total ascending'},
                             height=max(min(len(resumen) * 35 + 100, 600), 300),
