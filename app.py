@@ -11,15 +11,29 @@ from google_sheets_client import get_gspread_client, get_division_data, get_avai
 def parse_resultado(resultado):
     """
     Extrae los puntos del partido y los puntos para la tabla.
+    Identifica casos "WO" o "GP" (Walkover / Gana Puntos).
     Ej: "25 [4]" → (25, 4)
     """
-    match = re.match(r"(\d+)\s*\[(\d+)\]", str(resultado).strip())
+    res_str = str(resultado).strip().upper()
+    if res_str in ["-", "", "PENDIENTE"]:
+        return None, None
+    
+    # Manejo de Walkover / Puntos cedidos
+    if "W.O." in res_str or "WO" in res_str or "GP" in res_str:
+        return 28, 5  # 28-0 y 5 puntos bonus oficial
+    if "PP" in res_str:
+        return 0, 0
+        
+    match = re.match(r"(\d+)\s*\[(\d+)\]", res_str)
     if match:
         return int(match.group(1)), int(match.group(2))
-    elif resultado == '-' or resultado.strip() == '':
-        return None, None
     else:
-        return int(resultado), 0  # caso raro sin puntos campeonato
+        # Fallback si solo cargaron los tantos
+        import re
+        num_match = re.search(r"(\d+)", res_str)
+        if num_match:
+            return int(num_match.group(1)), 0
+        return None, None
 
 def procesar_partidos(df):
     posiciones = {}
@@ -42,6 +56,7 @@ def procesar_partidos(df):
                     "PG": 0,
                     "PE": 0,
                     "PP": 0,
+                    "PB": 0,
                     "PF": 0,
                     "PC": 0,
                     "DIF": 0
@@ -70,12 +85,27 @@ def procesar_partidos(df):
 
 
 
-    # Calcular diferencia
+    # Calcular diferencia y Puntos Bonus calculados matemáticamente
     for equipo in posiciones:
-        posiciones[equipo]["DIF"] = posiciones[equipo]["PF"] - posiciones[equipo]["PC"]
+        pos = posiciones[equipo]
+        pos["DIF"] = pos["PF"] - pos["PC"]
+        # PB = Puntos Totales Obtenidos - (Partidos Ganados * 4 + Empatados * 2)
+        pos["PB"] = pos["PTS"] - (pos["PG"] * 4 + pos["PE"] * 2)
+        if pos["PB"] < 0:
+            pos["PB"] = 0
 
     tabla = pd.DataFrame(list(posiciones.values()))
-    tabla = tabla.sort_values(by=["PTS", "DIF", "PF"], ascending=False).reset_index(drop=True)
+    
+    # Criterio Desempate: Se agrega el PB antes de DIF
+    tabla = tabla.sort_values(by=["PTS", "PB", "DIF", "PF"], ascending=[False, False, False, False]).reset_index(drop=True)
+    
+    # Agregar columna de Posición
+    tabla.insert(0, "Pos.", range(1, len(tabla) + 1))
+    
+    # Reordenar las columnas visiblemente
+    columnas_orden = ["Pos.", "Equipo", "PTS", "PJ", "PG", "PE", "PP", "PB", "PF", "PC", "DIF"]
+    tabla = tabla[columnas_orden]
+    
     return tabla
 
 
@@ -362,11 +392,19 @@ if ano_nac_seleccionado_str:
                 st.markdown("&nbsp;") # This adds a small, non-breaking space
                 tabla_posiciones = procesar_partidos(df_jugados)
 
-                # Calcular altura dinámica (35 px por fila + 40 de margen por encabezado)
+                # Estilizar la tabla (Fondo verde para el TOP 4 de clasificación)
+                def color_clasificacion(row):
+                    if row.name < 4:  # Índices 0, 1, 2, 3 correspondientes al Top 4
+                        return ['background-color: rgba(46, 204, 113, 0.15)'] * len(row)
+                    return [''] * len(row)
+
+                tabla_estilizada = tabla_posiciones.style.apply(color_clasificacion, axis=1)
+
+                # Calcular altura dinámica
                 filas = len(tabla_posiciones)
                 altura = int(filas * 35 + 40)
 
-                st.dataframe(tabla_posiciones, hide_index=True, use_container_width=True, height=altura)
+                st.dataframe(tabla_estilizada, hide_index=True, use_container_width=True, height=altura)
 
             # --- PARTIDOS PENDIENTES ---
             with tab2:
