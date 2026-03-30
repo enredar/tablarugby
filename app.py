@@ -376,7 +376,10 @@ if ano_nac_seleccionado_str:
 
                 if modo_filtro == "Seleccionar clubes...":
                     if "clubes_checklist" not in st.session_state:
-                        st.session_state["clubes_checklist"] = {club: True for club in clubes_unicos}
+                        st.session_state["clubes_checklist"] = {}
+                    for club in clubes_unicos:
+                        if club not in st.session_state["clubes_checklist"]:
+                            st.session_state["clubes_checklist"][club] = True
 
                     with st.expander("✅ Elegí los clubes que querés ver"):
                         cols = st.columns(3)
