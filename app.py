@@ -29,7 +29,6 @@ def parse_resultado(resultado):
         return int(match.group(1)), int(match.group(2))
     else:
         # Fallback si solo cargaron los tantos
-        import re
         num_match = re.search(r"(\d+)", res_str)
         if num_match:
             return int(num_match.group(1)), 0
