@@ -417,45 +417,63 @@ if ano_nac_seleccionado_str:
                 clubes_visitantes = df_pendientes["Visitante"].unique()
                 clubes_unicos = sorted(set(clubes_locales) | set(clubes_visitantes))
 
-                modo_filtro = st.selectbox("🔎 Filtrar partidos pendientes por clubes:", ["Todos los clubes", "Seleccionar clubes..."])
+                # 1. Filtro Inteligente Nativo
+                clubes_seleccionados = st.multiselect(
+                    "🔎 Filtrar por clubes (dejá vacío para ver todos):", 
+                    options=clubes_unicos, 
+                    default=[]
+                )
 
-                clubes_activos = clubes_unicos.copy()
-
-                if modo_filtro == "Seleccionar clubes...":
-                    if "clubes_checklist" not in st.session_state:
-                        st.session_state["clubes_checklist"] = {}
-                    for club in clubes_unicos:
-                        if club not in st.session_state["clubes_checklist"]:
-                            st.session_state["clubes_checklist"][club] = True
-
-                    with st.expander("✅ Elegí los clubes que querés ver"):
-                        cols = st.columns(3)
-                        for i, club in enumerate(clubes_unicos):
-                            col = cols[i % 3]
-                            st.session_state["clubes_checklist"][club] = col.checkbox(
-                                club,
-                                value=st.session_state["clubes_checklist"][club],
-                                key=f"check_{club}"
-                            )
-
-                    clubes_activos = [club for club, activo in st.session_state["clubes_checklist"].items() if activo]
-
-                    if len(clubes_activos) == 0:
-                        st.warning("No seleccionaste ningún club. No se mostrarán partidos.")
-                    else:
-                        st.markdown(f"**Mostrando partidos de:** {', '.join(clubes_activos)}")
+                if not clubes_seleccionados:
+                    clubes_activos = clubes_unicos
+                else:
+                    clubes_activos = clubes_seleccionados
 
                 df_filtrado = df_pendientes[
                     df_pendientes["Local"].isin(clubes_activos) |
                     df_pendientes["Visitante"].isin(clubes_activos)
-                ].sort_values("Fecha_dt")
+                ].sort_values("Fecha_dt").copy()
 
-                # Calcular altura dinámica (35 px por fila + 40 de margen por encabezado)
-                filas = len(df_filtrado)
-                altura = min(int(filas * 35 + 40), 800)
+                # 2. Panel de Métricas Rápidas (KPIs)
+                col_metric_1, col_metric_2 = st.columns(2)
+                with col_metric_1:
+                    st.metric("🏉 Partidos Pendientes Totales", len(df_filtrado))
+                with col_metric_2:
+                    if not df_filtrado.empty and not df_filtrado["Fecha_dt"].dropna().empty:
+                        prox_fecha = df_filtrado["Fecha_dt"].dropna().min()
+                        prox_partido_str = prox_fecha.strftime('%d/%m/%Y %H:%M')
+                    else:
+                        prox_partido_str = "N/A"
+                    st.metric("📆 Próximo Partido", prox_partido_str)
+
+                # 3. Mejoras Visuales en el DataFrame
+                dias_espanol = {
+                    "Monday": "Lunes", 
+                    "Tuesday": "Martes", 
+                    "Wednesday": "Miércoles", 
+                    "Thursday": "Jueves", 
+                    "Friday": "Viernes", 
+                    "Saturday": "Sábado", 
+                    "Sunday": "Domingo"
+                }
+
+                if not df_filtrado.empty:
+                    df_filtrado["Día"] = df_filtrado["Fecha_dt"].dt.day_name().map(dias_espanol).fillna("-")
+                    df_mostrar = df_filtrado.rename(columns={
+                        "Local": "🏠 Local", 
+                        "Visitante": "✈️ Visitante"
+                    })
+                    columnas_mostrar = ["Día", "Fecha", "🏠 Local", "✈️ Visitante"]
+                else:
+                    df_mostrar = pd.DataFrame(columns=["Día", "Fecha", "🏠 Local", "✈️ Visitante"])
+                    columnas_mostrar = df_mostrar.columns.tolist()
+
+                # Calcular altura dinámica
+                filas = len(df_mostrar)
+                altura = min(int(filas * 35 + 40), 800) if filas > 0 else 100
 
                 st.dataframe(
-                    df_filtrado[["Local", "Visitante", "Fecha"]],
+                    df_mostrar[columnas_mostrar],
                     hide_index=True,
                     use_container_width=True,
                     height=altura
