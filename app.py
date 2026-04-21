@@ -747,9 +747,10 @@ if ano_nac_seleccionado_str:
                     if 'fecha_sel_pop' not in st.session_state or st.session_state['fecha_sel_pop'] not in opciones_fecha:
                         st.session_state['fecha_sel_pop'] = opciones_fecha[default_idx] if opciones_fecha else None
                     
-                    with st.popover(f"📅 Fecha: {st.session_state['fecha_sel_pop']}", use_container_width=True):
-                        for f_op in opciones_fecha:
-                            if st.button(f_op, use_container_width=True, key=f"btn_fecha_{f_op}"):
+                    with st.expander(f"📅 Cambiar Fecha (Actual: {st.session_state['fecha_sel_pop']})"):
+                        cols_f = st.columns(2)
+                        for i, f_op in enumerate(opciones_fecha):
+                            if cols_f[i % 2].button(f_op, use_container_width=True, key=f"btn_f_exp_{f_op}"):
                                 st.session_state['fecha_sel_pop'] = f_op
                                 st.rerun()
                     
@@ -887,9 +888,10 @@ if ano_nac_seleccionado_str:
                 if 'equipo_sel_pop' not in st.session_state or st.session_state['equipo_sel_pop'] not in equipos:
                     st.session_state['equipo_sel_pop'] = equipos[default_index] if equipos else None
                 
-                with st.popover(f"📍 Equipo: {st.session_state['equipo_sel_pop']}", use_container_width=True):
-                    for e_op in equipos:
-                        if st.button(e_op, use_container_width=True, key=f"btn_equipo_{e_op}"):
+                with st.expander(f"📍 Cambiar Equipo (Actual: {st.session_state['equipo_sel_pop']})"):
+                    cols_e = st.columns(2)
+                    for i, e_op in enumerate(equipos):
+                        if cols_e[i % 2].button(e_op, use_container_width=True, key=f"btn_e_exp_{e_op}"):
                             st.session_state['equipo_sel_pop'] = e_op
                             st.rerun()
                 
