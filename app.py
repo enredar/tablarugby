@@ -614,10 +614,12 @@ if ano_nac_seleccionado_str:
                 st.markdown("&nbsp;") # This adds a small, non-breaking space
                 tabla_posiciones = procesar_partidos(df_jugados)
 
-                # Estilizar la tabla (Fondo verde para el TOP 4 de clasificación)
+                # Estilizar la tabla (Top 6: verde para Top 4, amarillo para 5-6)
                 def color_clasificacion(row):
-                    if row.name < 4:  # Índices 0, 1, 2, 3 correspondientes al Top 4
+                    if row.name < 4:  # Índices 0-3: Top 4 clasificación directa
                         return ['background-color: rgba(46, 204, 113, 0.15)'] * len(row)
+                    elif row.name < 6:  # Índices 4-5: zona de repechaje
+                        return ['background-color: rgba(241, 196, 15, 0.10)'] * len(row)
                     return [''] * len(row)
 
                 tabla_estilizada = tabla_posiciones.style.apply(color_clasificacion, axis=1)
@@ -634,7 +636,14 @@ if ano_nac_seleccionado_str:
 
                 df_pendientes = df_raw_data[df_raw_data["Estado"] == "Pendiente"].copy()
                 df_pendientes["Fecha_dt"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce", dayfirst=True)
-                df_pendientes["Fecha"] = df_pendientes["Fecha_dt"].dt.strftime('%d/%m/%Y %H:%M')
+                # Días abreviados para compactar tabla en mobile
+                dias_abrev = {
+                    "Monday": "Lun", "Tuesday": "Mar", "Wednesday": "Mié",
+                    "Thursday": "Jue", "Friday": "Vie", "Saturday": "Sáb", "Sunday": "Dom"
+                }
+                df_pendientes["Fecha"] = df_pendientes["Fecha_dt"].apply(
+                    lambda x: f"{dias_abrev.get(x.strftime('%A'), '')} {x.strftime('%d/%m %H:%M')}" if pd.notna(x) else "-"
+                )
                 clubes_locales = df_pendientes["Local"].unique()
                 clubes_visitantes = df_pendientes["Visitante"].unique()
                 clubes_unicos = sorted(set(clubes_locales) | set(clubes_visitantes))
@@ -669,25 +678,14 @@ if ano_nac_seleccionado_str:
                     st.metric("Próximo Partido", prox_partido_str)
 
                 # 3. Mejoras Visuales en el DataFrame
-                dias_espanol = {
-                    "Monday": "Lunes", 
-                    "Tuesday": "Martes", 
-                    "Wednesday": "Miércoles", 
-                    "Thursday": "Jueves", 
-                    "Friday": "Viernes", 
-                    "Saturday": "Sábado", 
-                    "Sunday": "Domingo"
-                }
-
                 if not df_filtrado.empty:
-                    df_filtrado["Día"] = df_filtrado["Fecha_dt"].dt.day_name().map(dias_espanol).fillna("-")
                     df_mostrar = df_filtrado.rename(columns={
                         "Local": "🏠 Local", 
                         "Visitante": "✈️ Visitante"
                     })
-                    columnas_mostrar = ["Día", "Fecha", "🏠 Local", "✈️ Visitante"]
+                    columnas_mostrar = ["Fecha", "🏠 Local", "✈️ Visitante"]
                 else:
-                    df_mostrar = pd.DataFrame(columns=["Día", "Fecha", "🏠 Local", "✈️ Visitante"])
+                    df_mostrar = pd.DataFrame(columns=["Fecha", "🏠 Local", "✈️ Visitante"])
                     columnas_mostrar = df_mostrar.columns.tolist()
 
                 # Calcular altura dinámica
@@ -745,50 +743,51 @@ if ano_nac_seleccionado_str:
                         st.markdown(f"#### Estadísticas de {equipo_sel}")
                         
                         m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("Partidos jugados", total)
+                        m1.metric("Jugados", total)
                         m2.metric("Pts. torneo", puntos_totales_torneo_equipo)
                         m3.metric("Ganados", f"{victorias} ({victorias/total:.0%})" if total > 0 else "0")
                         m4.metric("Perdidos", f"{derrotas} ({derrotas/total:.0%})" if total > 0 else "0")
 
-                        m5, m6, m7 = st.columns(3)
+                        m5, m6, m7, m8 = st.columns(4)
                         m5.metric("Empatados", f"{empates} ({empates/total:.0%})" if total > 0 else "0")
-                        m6.metric("Prom. PF/PC", f"{prom_puntos_favor:.1f} / {prom_puntos_contra:.1f}")
-                        m7.metric("Dif. Promedio", f"{dif_prom_partido:+.1f}", delta=f"{dif_prom_partido:+.1f}")
+                        m6.metric("Pts. Bonus", int(puntos_totales_torneo_equipo - (victorias * 4 + empates * 2)) if total > 0 else 0)
+                        m7.metric("Prom. PF/PC", f"{prom_puntos_favor:.1f} / {prom_puntos_contra:.1f}")
+                        m8.metric("Dif. Prom.", f"{dif_prom_partido:+.1f}", delta=f"{dif_prom_partido:+.1f}")
 
-                        st.markdown("#### Distribución de Resultados")
-                        if total > 0: 
-                            # Gráfico interactivo con px.pie en lugar de plt
-                            df_pie = pd.DataFrame({
-                                "Resultado": ["Ganados", "Empatados", "Perdidos"],
-                                "Cantidad": [victorias, empates, derrotas]
-                            })
-                            # Filtramos para que no salgan porciones con valor 0
-                            df_pie = df_pie[df_pie["Cantidad"] > 0]
-                            
-                            fig1 = px.pie(
-                                df_pie, 
-                                values="Cantidad", 
-                                names="Resultado",
-                                color="Resultado",
-                                color_discrete_map={"Ganados": "#2ecc71", "Empatados": "#95a5a6", "Perdidos": "#e74c3c"}
-                            )
-                            fig1.update_traces(
-                                textinfo='percent+value',
-                                hovertemplate='<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>'
-                            )
-                            fig1.update_layout(
-                                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-                                margin=dict(t=20, b=20, l=20, r=20),
-                                dragmode=False
-                            )
-                            st.plotly_chart(fig1, use_container_width=True, config={
-                                'displayModeBar': False,
-                                'scrollZoom': False,
-                                'staticPlot': False,
-                                'responsive': True
-                            })
-                        else:
-                            st.info("No hay partidos jugados para mostrar en el gráfico.")
+                        with st.expander("Distribución de Resultados", expanded=False):
+                            if total > 0: 
+                                # Gráfico interactivo con px.pie en lugar de plt
+                                df_pie = pd.DataFrame({
+                                    "Resultado": ["Ganados", "Empatados", "Perdidos"],
+                                    "Cantidad": [victorias, empates, derrotas]
+                                })
+                                # Filtramos para que no salgan porciones con valor 0
+                                df_pie = df_pie[df_pie["Cantidad"] > 0]
+                                
+                                fig1 = px.pie(
+                                    df_pie, 
+                                    values="Cantidad", 
+                                    names="Resultado",
+                                    color="Resultado",
+                                    color_discrete_map={"Ganados": "#2ecc71", "Empatados": "#95a5a6", "Perdidos": "#e74c3c"}
+                                )
+                                fig1.update_traces(
+                                    textinfo='percent+value',
+                                    hovertemplate='<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>'
+                                )
+                                fig1.update_layout(
+                                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                                    margin=dict(t=20, b=20, l=20, r=20),
+                                    dragmode=False
+                                )
+                                st.plotly_chart(fig1, use_container_width=True, config={
+                                    'displayModeBar': False,
+                                    'scrollZoom': False,
+                                    'staticPlot': False,
+                                    'responsive': True
+                                })
+                            else:
+                                st.info("No hay partidos jugados para mostrar en el gráfico.")
                     else:
                         st.info(f"No se encontraron partidos jugados para {equipo_sel}.")
 
@@ -822,45 +821,46 @@ if ano_nac_seleccionado_str:
                         "Puntos Rival": "En contra"
                     })
 
-                    # Gráfico de líneas con Plotly
-                    fig2 = px.line(
-                        df_line,
-                        x="Etiqueta",
-                        y="Puntos",
-                        color="Tipo",
-                        markers=True,
-                        text="Puntos",
-                        color_discrete_map={"A favor": "#3498db", "En contra": "#e74c3c"},
-                        hover_data={"Etiqueta": False, "Tipo": False, "Rival": True, "Resultado": True}
-                    )
-                    
-                    # Tooltip personalizado configurando el customdata entregado por hover_data
-                    fig2.update_traces(
-                        textposition="top center",
-                        hovertemplate='<b>%{x}</b><br>Puntos %{legendgroup}: %{y}<br>Rival: %{customdata[0]}<br>Resultado: %{customdata[1]}<extra></extra>'
-                    )
+                    with st.expander("Evolución de Puntos por Partido", expanded=False):
+                        # Gráfico de líneas con Plotly
+                        fig2 = px.line(
+                            df_line,
+                            x="Etiqueta",
+                            y="Puntos",
+                            color="Tipo",
+                            markers=True,
+                            text="Puntos",
+                            color_discrete_map={"A favor": "#3498db", "En contra": "#e74c3c"},
+                            hover_data={"Etiqueta": False, "Tipo": False, "Rival": True, "Resultado": True}
+                        )
+                        
+                        # Tooltip personalizado configurando el customdata entregado por hover_data
+                        fig2.update_traces(
+                            textposition="top center",
+                            hovertemplate='<b>%{x}</b><br>Puntos %{legendgroup}: %{y}<br>Rival: %{customdata[0]}<br>Resultado: %{customdata[1]}<extra></extra>'
+                        )
 
-                    # Mejoras estéticas y layout de Plotly
-                    fig2.update_layout(
-                        title=dict(text=f"Evolución de Puntos por Partido - {equipo_sel}"),
-                        xaxis=dict(
-                            tickangle=-45,
-                            tickfont=dict(size=10),
-                            title=None
-                        ),
-                        yaxis_title="Puntos",
-                        legend_title="Tipo",
-                        hovermode="x unified",
-                        margin=dict(t=50, b=40, l=40, r=20),
-                        dragmode=False
-                    )
+                        # Mejoras estéticas y layout de Plotly
+                        fig2.update_layout(
+                            title=dict(text=f"Evolución de Puntos por Partido - {equipo_sel}"),
+                            xaxis=dict(
+                                tickangle=-45,
+                                tickfont=dict(size=10),
+                                title=None
+                            ),
+                            yaxis_title="Puntos",
+                            legend_title="Tipo",
+                            hovermode="x unified",
+                            margin=dict(t=50, b=40, l=40, r=20),
+                            dragmode=False
+                        )
 
-                    st.plotly_chart(fig2, use_container_width=True, config={
-                        'displayModeBar': False,
-                        'scrollZoom': False,
-                        'staticPlot': False,
-                        'responsive': True
-                    })
+                        st.plotly_chart(fig2, use_container_width=True, config={
+                            'displayModeBar': False,
+                            'scrollZoom': False,
+                            'staticPlot': False,
+                            'responsive': True
+                        })
 
                     # --- Sección de Resultados Jugados ---
                     st.markdown("#### Resultados Jugados")
@@ -880,7 +880,8 @@ if ano_nac_seleccionado_str:
                         else:
                             resultado_class = "resultado-empate"
                         
-                        fecha_str = fecha.strftime('%d/%m') if pd.notna(fecha) else "-"
+                        dias_abrev_rc = {"Monday": "Lun", "Tuesday": "Mar", "Wednesday": "Mié", "Thursday": "Jue", "Friday": "Vie", "Saturday": "Sáb", "Sunday": "Dom"}
+                        fecha_str = f"{dias_abrev_rc.get(fecha.strftime('%A'), '')} {fecha.strftime('%d/%m')}" if pd.notna(fecha) else "-"
                         
                         st.markdown(f"""
                         <div class="result-card {resultado_class}">
@@ -907,7 +908,10 @@ if ano_nac_seleccionado_str:
 
                         # Convertir y formatear la fecha sin segundos
                         pendientes_equipo["Fecha_dt"] = pd.to_datetime(pendientes_equipo["Fecha y Hora"], errors="coerce", dayfirst=True)
-                        pendientes_equipo["Fecha"] = pendientes_equipo["Fecha_dt"].dt.strftime('%d/%m/%Y %H:%M')
+                        dias_abrev_pe = {"Monday": "Lun", "Tuesday": "Mar", "Wednesday": "Mié", "Thursday": "Jue", "Friday": "Vie", "Saturday": "Sáb", "Sunday": "Dom"}
+                        pendientes_equipo["Fecha"] = pendientes_equipo["Fecha_dt"].apply(
+                            lambda x: f"{dias_abrev_pe.get(x.strftime('%A'), '')} {x.strftime('%d/%m %H:%M')}" if pd.notna(x) else "-"
+                        )
 
                         # Determinar rival y condición
                         pendientes_equipo["Rival"] = pendientes_equipo.apply(
@@ -923,7 +927,7 @@ if ano_nac_seleccionado_str:
                         pendientes_equipo = pendientes_equipo.sort_values("Fecha_dt")
 
                         # Nombre dinámico para la columna
-                        columna_condicion = f"{equipo_seleccionado} juega como"
+                        columna_condicion = f"{equipo_seleccionado} es"
 
                         # Renombrar la columna para que sea más clara
                         pendientes_equipo.rename(columns={"Condición": columna_condicion}, inplace=True)
@@ -951,11 +955,10 @@ if ano_nac_seleccionado_str:
                         total_rojas = df_tarjetas_equipo["Incidencia"].str.contains("roja", case=False).sum()
                         total_azules = df_tarjetas_equipo["Incidencia"].str.contains("azul", case=False).sum()
 
-                        st.markdown(f"""
-                        - 🟨 **Total amarillas:** {total_amarillas}  
-                        - 🟥 **Total rojas:** {total_rojas}  
-                        - 🔵 **Total azules:** {total_azules}  
-                        """)
+                        tc1, tc2, tc3 = st.columns(3)
+                        tc1.metric("Amarillas", total_amarillas)
+                        tc2.metric("Rojas", total_rojas)
+                        tc3.metric("Azules", total_azules)
 
                         # Mostrar tabla detallada
                         st.dataframe(
