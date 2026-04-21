@@ -317,12 +317,16 @@ st.markdown("""
                 padding: 1rem 1rem;
             }
         }
-
+        
         /* Category selector — radio as compact pills */
         div[role="radiogroup"] {
+            display: flex !important;
+            justify-content: center !important;
+            flex-wrap: wrap !important;
             gap: 0.35rem !important;
-            margin-bottom: 0 !important;
+            margin-bottom: 0.5rem !important;
         }
+
         div[role="radiogroup"] label {
             min-height: 32px;
             min-width: auto;
