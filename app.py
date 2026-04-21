@@ -680,26 +680,38 @@ if ano_nac_seleccionado_str:
                         
                         if est.startswith("Cerrado"):
                             # Partido Jugado
-                            pL, _ = parse_resultado(resL)
-                            pV, _ = parse_resultado(resV)
+                            pfL, ptL = parse_resultado(resL)
+                            pfV, ptV = parse_resultado(resV)
                             
-                            # Estilo de tarjeta (usamos empate/gris para no sesgar por equipo en esta vista general)
+                            ptL_val = int(ptL) if ptL is not None else 0
+                            ptV_val = int(ptV) if ptV is not None else 0
+                            
+                            # Identificar ganador
+                            ganador_l = pfL > pfV if pfL is not None and pfV is not None else False
+                            ganador_v = pfV > pfL if pfL is not None and pfV is not None else False
+                            
                             res_class = "resultado-empate"
-                            score_disp = f"{int(pL) if pL is not None else 0} - {int(pV) if pV is not None else 0}"
+                            score_disp = f"{int(pfL) if pfL is not None else 0} - {int(pfV) if pfV is not None else 0}"
                             meta_disp = "Finalizado"
+                            
+                            # Formatear nombres con puntos y negrita si ganó
+                            loc_html = f"<b>{loc}</b> <span style='opacity: 0.6; font-size: 0.8rem;'>({ptL_val})</span>" if ganador_l else f"{loc} <span style='opacity: 0.6; font-size: 0.8rem;'>({ptL_val})</span>"
+                            vis_html = f"<b>{vis}</b> <span style='opacity: 0.6; font-size: 0.8rem;'>({ptV_val})</span>" if ganador_v else f"{vis} <span style='opacity: 0.6; font-size: 0.8rem;'>({ptV_val})</span>"
                         else:
                             # Partido Pendiente
                             res_class = "na-card"
                             score_disp = "vs"
                             meta_disp = fecha_h
+                            loc_html = loc
+                            vis_html = vis
                         
                         st.markdown(f"""
                         <div class="result-card {res_class if est.startswith('Cerrado') else ''}" style="{'background: rgba(255,255,255,0.02); border-left: 4px solid rgba(255,255,255,0.1);' if not est.startswith('Cerrado') else ''}">
                             <div class="result-meta">{meta_disp}</div>
                             <div class="result-teams">
-                                <span class="result-equipo" style="text-align: left;">{loc}</span>
-                                <span class="result-score">{score_disp}</span>
-                                <span class="result-rival" style="text-align: right;">{vis}</span>
+                                <span class="result-equipo" style="text-align: left; flex: 2;">{loc_html}</span>
+                                <span class="result-score" style="flex: 1;">{score_disp}</span>
+                                <span class="result-rival" style="text-align: right; flex: 2;">{vis_html}</span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
