@@ -826,7 +826,7 @@ if ano_nac_seleccionado_str:
 
             # ---------- Análisis por equipo ----------
             with tab3:
-                st.subheader("Análisis por equipo")
+                # Subheader eliminado para ahorrar espacio
 
                 equipos = sorted(tabla_posiciones["Equipo"].unique())
                 # Seleccionar "UNIVERSITARIO" por defecto si existe, si no el primero.
@@ -1021,9 +1021,9 @@ if ano_nac_seleccionado_str:
                         <div class="result-card {resultado_class}">
                             <div class="result-meta">{fecha_str} · {condicion}</div>
                             <div class="result-teams">
-                                <span class="result-equipo">{equipo_sel}</span>
-                                <span class="result-score">{int(pf)} - {int(pc)}</span>
-                                <span class="result-rival">{rival}</span>
+                                <span class="result-equipo" style="text-align: left; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{equipo_sel}</span>
+                                <span class="result-score" style="flex: 1;">{int(pf)} - {int(pc)}</span>
+                                <span class="result-rival" style="text-align: right; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{rival}</span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1036,42 +1036,35 @@ if ano_nac_seleccionado_str:
                     ].copy()
 
                     if not pendientes_equipo.empty:
-                        st.subheader("Partidos pendientes del equipo")
-
-                        equipo_seleccionado = equipo_sel  # Asegurate de que esta variable tenga el nombre del equipo
-
-                        # Convertir y formatear la fecha sin segundos
+                        # Procesamiento de datos para las tarjetas de pendientes
                         pendientes_equipo["Fecha_dt"] = pd.to_datetime(pendientes_equipo["Fecha y Hora"], errors="coerce", dayfirst=True)
                         dias_abrev_pe = {"Monday": "Lun", "Tuesday": "Mar", "Wednesday": "Mié", "Thursday": "Jue", "Friday": "Vie", "Saturday": "Sáb", "Sunday": "Dom"}
                         pendientes_equipo["Fecha"] = pendientes_equipo["Fecha_dt"].apply(
                             lambda x: f"{dias_abrev_pe.get(x.strftime('%A'), '')} {x.strftime('%d/%m %H:%M')}" if pd.notna(x) else "-"
                         )
-
-                        # Determinar rival y condición
                         pendientes_equipo["Rival"] = pendientes_equipo.apply(
                             lambda row: row["Visitante"] if row["Local"] == equipo_seleccionado else row["Local"],
                             axis=1
                         )
-                        # Cambio visual de emojis para identificar Local / Visitante
                         pendientes_equipo["Condición"] = pendientes_equipo["Local"].apply(
-                            lambda x: "🏠 Local" if x == equipo_seleccionado else "✈️ Visitante"
+                            lambda x: "Local" if x == equipo_seleccionado else "Visitante"
                         )
-
-                        # Ordenar por fecha_dt para que sea cronológico
                         pendientes_equipo = pendientes_equipo.sort_values("Fecha_dt")
 
-                        # Nombre dinámico para la columna
-                        columna_condicion = f"{equipo_seleccionado} es"
+                        st.markdown("#### Partidos pendientes")
 
-                        # Renombrar la columna para que sea más clara
-                        pendientes_equipo.rename(columns={"Condición": columna_condicion}, inplace=True)
-
-                        # Mostrar tabla
-                        st.dataframe(
-                            pendientes_equipo[["Rival", columna_condicion, "Fecha"]],
-                            hide_index=True,
-                            use_container_width=True
-                        )
+                        for _, row in pendientes_equipo.iterrows():
+                            # Reutilizamos el estilo de na-card para pendientes
+                            st.markdown(f"""
+                            <div class="result-card na-card" style="margin-bottom: 0.5rem; padding: 0.6rem 1rem; background: rgba(30,30,50,0.4); border-left: 4px solid #f1c40f;">
+                                <div class="result-meta">{row['Fecha']} · {row['Condición']}</div>
+                                <div class="result-teams">
+                                    <span class="result-equipo" style="text-align: left; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{equipo_seleccionado}</span>
+                                    <span class="result-score" style="flex: 1; font-size: 0.9rem; opacity: 0.7;">vs</span>
+                                    <span class="result-rival" style="text-align: right; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{row['Rival']}</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
                     else:
                         st.info("Este equipo no tiene partidos pendientes.")
 
@@ -1082,7 +1075,7 @@ if ano_nac_seleccionado_str:
                     df_tarjetas_equipo = df_tarjetas[df_tarjetas["Equipo"] == equipo_seleccionado]
 
                     if not df_tarjetas_equipo.empty:
-                        st.subheader("Incidencias disciplinarias")
+                        st.markdown("#### Incidencias disciplinarias")
                         
                         # Mostrar resumen rápido
                         total_amarillas = df_tarjetas_equipo["Incidencia"].str.contains("amarilla", case=False).sum()
