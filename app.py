@@ -292,34 +292,77 @@ st.set_page_config(page_title="Rugby Juveniles", layout="wide")
 # Unified CSS for premium mobile-first experience
 st.markdown("""
     <style>
+        /* Aggressive Streamlit padding removal for compact header */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 0 !important;
+        }
+        header[data-testid="stHeader"] {
+            height: 2.5rem !important;
+        }
+        /* Reduce gap between elements globally */
+        .stElementContainer {
+            margin-bottom: -0.25rem;
+        }
+        /* Compact title */
+        h1 {
+            font-size: 1.4rem !important;
+            margin-bottom: 0.25rem !important;
+            padding-top: 0 !important;
+        }
+        @media (min-width: 768px) {
+            h1 { font-size: 1.8rem !important; }
+        }
+
         /* 5. Container responsive */
         .main-container {
             max-width: 95%;
             margin: 0 auto;
-            padding: 0.5rem 0.5rem;
+            padding: 0.25rem 0.5rem;
         }
         @media (min-width: 768px) {
             .main-container {
                 max-width: 80%;
-                padding: 1.5rem 1rem;
+                padding: 1rem 1rem;
             }
         }
 
-        /* 4. Radio buttons — touch target mínimo 44px */
+        /* Category selector — radio as compact pills */
+        div[role="radiogroup"] {
+            gap: 0.35rem !important;
+            margin-bottom: 0 !important;
+        }
         div[role="radiogroup"] label {
-            min-height: 44px;
-            min-width: 44px;
+            min-height: 32px;
+            min-width: auto;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            padding: 0.5rem 1rem;
-            font-size: 1rem;
+            padding: 0.2rem 0.7rem;
+            font-size: 0.82rem;
             cursor: pointer;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.15) !important;
+            background: rgba(255,255,255,0.05) !important;
+            transition: all 0.15s ease;
         }
+        div[role="radiogroup"] label:hover {
+            background: rgba(255,255,255,0.12) !important;
+        }
+        /* Hide the radio circle */
         div[role="radiogroup"] label > div:first-child {
-            min-width: 20px;
-            min-height: 20px;
+            display: none !important;
         }
+        /* Selected pill */
+        div[role="radiogroup"] label[data-checked="true"],
+        div[role="radiogroup"] label:has(input:checked) {
+            background: rgba(255, 75, 75, 0.2) !important;
+            border-color: rgba(255, 75, 75, 0.6) !important;
+            color: #ff4b4b !important;
+            font-weight: 700;
+        }
+
+
 
         /* 10. Streamlit Tabs — más grandes y táctiles */
         button[data-baseweb="tab"] {
@@ -500,8 +543,6 @@ st.markdown("""
 
 st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
-# El título se mostrará dinámicamente después de la selección para ahorrar espacio
-
 
 # --- Conexión a Google Sheets ---
 # (get_gspread_client se cachea y solo se ejecuta una vez o cuando sea necesario)
@@ -532,49 +573,28 @@ if not default_year:
     st.error("No se pudieron cargar las divisiones desde Google Sheets y no hay fallback. Verifica la configuración.")
     st.stop()
 
-# --- Selección de División Compacta ---
-
-# --- Inicio del bloque modificado ---
-
-# Asegurarse de que default_year esté en las opciones para calcular el índice correcto
-# y que todas las opciones sean strings para el selector
+# --- Selección de División — Pill Buttons ---
 options_str = [str(opt) for opt in options_for_selectbox]
 default_year_str = str(default_year)
 
-try:
-    default_index = options_str.index(default_year_str)
-except ValueError:
-    default_index = 0 # Si default_year no está en la lista, selecciona el primero
-    if not options_str: # Si no hay opciones, no se puede seleccionar nada
-        st.error("No hay años disponibles para seleccionar.")
-        st.stop() # Detener la ejecución si no hay opciones
-
-# Usar st.selectbox para ahorrar espacio vertical en mobile
-def update_selected_year():
-    st.session_state["ano_nac_seleccionado_str"] = st.session_state["selectbox_year_selector"]
-
-selected_year_from_selectbox = st.selectbox(
-    label="Categoría / Año de Nacimiento:",
-    options=options_str,
-    index=default_index,
-    key="selectbox_year_selector",
-    on_change=update_selected_year
-)
-
-# Establecer el valor inicial en session_state
+# Inicializar session_state
 if "ano_nac_seleccionado_str" not in st.session_state:
-    st.session_state["ano_nac_seleccionado_str"] = selected_year_from_selectbox
-elif st.session_state["selectbox_year_selector"] != st.session_state.get("ano_nac_seleccionado_str"):
-    # Esto es por si el estado del selector y el session_state se desincronizan
-    # (aunque on_change debería mantenerlos sincronizados)
-    st.session_state["ano_nac_seleccionado_str"] = st.session_state["selectbox_year_selector"]
+    st.session_state["ano_nac_seleccionado_str"] = default_year_str
 
+ano_nac_seleccionado_str = st.session_state["ano_nac_seleccionado_str"]
 
-# Obtener el valor seleccionado de session_state para el resto de tu lógica
-ano_nac_seleccionado_str = st.session_state.get("ano_nac_seleccionado_str", default_year_str if options_str else None)
-st.title(f"Tabla de Posiciones — {ano_nac_seleccionado_str}")
+st.title(f"Rugby Juveniles — {ano_nac_seleccionado_str}")
 
-# --- Fin del bloque modificado ---
+# Selector funcional (radio estilizado como pills por CSS)
+selected = st.radio(
+    "cat", options=options_str,
+    index=options_str.index(ano_nac_seleccionado_str) if ano_nac_seleccionado_str in options_str else 0,
+    horizontal=True, key="pill_selector",
+    label_visibility="collapsed"
+)
+if selected != ano_nac_seleccionado_str:
+    st.session_state["ano_nac_seleccionado_str"] = selected
+    st.rerun()
 
 # Reinicializar clubes_checklist si cambió la división
 if "estado_anno_anterior" not in st.session_state or st.session_state["estado_anno_anterior"] != ano_nac_seleccionado_str:
@@ -592,8 +612,7 @@ if ano_nac_seleccionado_str:
         if not all(col in df_raw_data.columns for col in expected_cols):
             st.error(f"La planilla para el año {ano_nac_seleccionado_str} no tiene todas las columnas esperadas: {expected_cols}")
         else:
-            # Texto instructivo (puedes usarlo junto con el CSS)
-            st.caption("Navega entre las diferentes secciones haciendo clic en los títulos de abajo...")
+            # Tabs inmediatos sin texto extra
           
             # Creamos las pestañas
             tab1, tab_res, tab3, tab2, tab5, tab4 = st.tabs([
@@ -607,8 +626,7 @@ if ano_nac_seleccionado_str:
             # --- TABLA DE POSICIONES ---
             with tab1:
                 df_jugados = df_raw_data[df_raw_data["Estado"].str.startswith("Cerrado")].copy()
-                st.subheader("Tabla de posiciones")
-                st.markdown("&nbsp;") # This adds a small, non-breaking space
+                # Tabla directa sin subheader redundante
                 tabla_posiciones = procesar_partidos(df_jugados)
 
                 # Estilizar la tabla (Top 6: verde para Top 4, amarillo para 5-6)
