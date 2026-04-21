@@ -743,15 +743,7 @@ if ano_nac_seleccionado_str:
                         if ultima_fecha_valida in opciones_fecha:
                             default_idx = opciones_fecha.index(ultima_fecha_valida)
 
-                    st.caption("Seleccioná la fecha:")
-                    fecha_sel = st.radio(
-                        "Seleccioná la fecha de los partidos:", 
-                        opciones_fecha, 
-                        index=default_idx,
-                        horizontal=True,
-                        key="fecha_selector_radio",
-                        label_visibility="collapsed"
-                    )
+                    fecha_sel = st.selectbox("Seleccioná la fecha de los partidos:", opciones_fecha, index=default_idx)
                     
                     df_ronda = df_raw_data[df_raw_data["Fecha_Grupo"] == fecha_sel].copy()
                     
@@ -881,15 +873,7 @@ if ano_nac_seleccionado_str:
                 equipos = sorted(tabla_posiciones["Equipo"].unique())
                 # Seleccionar "UNIVERSITARIO" por defecto si existe, si no el primero.
                 default_index = equipos.index("UNIVERSITARIO") if "UNIVERSITARIO" in equipos else 0
-                st.caption("Seleccioná un equipo:")
-                equipo_sel = st.radio(
-                    "Seleccioná un equipo", 
-                    equipos, 
-                    index=default_index, 
-                    horizontal=True, 
-                    key="equipo_selector_radio",
-                    label_visibility="collapsed"
-                )
+                equipo_sel = st.selectbox("Seleccioná un equipo", equipos, index=default_index)
 
                 if equipo_sel:
                     # Partidos jugados por el equipo
