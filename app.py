@@ -743,7 +743,21 @@ if ano_nac_seleccionado_str:
                         if ultima_fecha_valida in opciones_fecha:
                             default_idx = opciones_fecha.index(ultima_fecha_valida)
 
-                    fecha_sel = st.selectbox("Seleccioná la fecha de los partidos:", opciones_fecha, index=default_idx)
+                    # Selector de Fecha con Popover (Evita el teclado en mobile)
+                    if 'fecha_sel_pop' not in st.session_state or st.session_state['fecha_sel_pop'] not in opciones_fecha:
+                        st.session_state['fecha_sel_pop'] = opciones_fecha[default_idx] if opciones_fecha else None
+                    
+                    with st.popover(f"📅 Fecha: {st.session_state['fecha_sel_pop']}", use_container_width=True):
+                        fecha_sel_new = st.radio(
+                            "Seleccioná la fecha:",
+                            opciones_fecha,
+                            index=opciones_fecha.index(st.session_state['fecha_sel_pop']) if st.session_state['fecha_sel_pop'] in opciones_fecha else 0
+                        )
+                        if fecha_sel_new != st.session_state['fecha_sel_pop']:
+                            st.session_state['fecha_sel_pop'] = fecha_sel_new
+                            st.rerun()
+                    
+                    fecha_sel = st.session_state['fecha_sel_pop']
                     
                     df_ronda = df_raw_data[df_raw_data["Fecha_Grupo"] == fecha_sel].copy()
                     
@@ -873,7 +887,21 @@ if ano_nac_seleccionado_str:
                 equipos = sorted(tabla_posiciones["Equipo"].unique())
                 # Seleccionar "UNIVERSITARIO" por defecto si existe, si no el primero.
                 default_index = equipos.index("UNIVERSITARIO") if "UNIVERSITARIO" in equipos else 0
-                equipo_sel = st.selectbox("Seleccioná un equipo", equipos, index=default_index)
+                # Selector de Equipo con Popover (Evita el teclado en mobile)
+                if 'equipo_sel_pop' not in st.session_state or st.session_state['equipo_sel_pop'] not in equipos:
+                    st.session_state['equipo_sel_pop'] = equipos[default_index] if equipos else None
+                
+                with st.popover(f"📍 Equipo: {st.session_state['equipo_sel_pop']}", use_container_width=True):
+                    equipo_sel_new = st.radio(
+                        "Seleccioná un equipo:",
+                        equipos,
+                        index=equipos.index(st.session_state['equipo_sel_pop']) if st.session_state['equipo_sel_pop'] in equipos else 0
+                    )
+                    if equipo_sel_new != st.session_state['equipo_sel_pop']:
+                        st.session_state['equipo_sel_pop'] = equipo_sel_new
+                        st.rerun()
+                
+                equipo_sel = st.session_state['equipo_sel_pop']
 
                 if equipo_sel:
                     # Partidos jugados por el equipo
