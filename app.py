@@ -600,11 +600,12 @@ if ano_nac_seleccionado_str:
             st.caption("Navega entre las diferentes secciones haciendo clic en los títulos de abajo...")
           
             # Creamos las pestañas
-            tab1, tab3, tab2, tab5, tab4 = st.tabs([
+            tab1, tab_res, tab3, tab2, tab5, tab4 = st.tabs([
                 "Posiciones", 
+                "Resultados",
                 "Equipos", 
                 "Pendientes", 
-                "Tarjetas",
+                "Disciplina",
                 "Predicciones"
             ])
             # --- TABLA DE POSICIONES ---
@@ -629,6 +630,72 @@ if ano_nac_seleccionado_str:
                 altura = int(filas * 35 + 40)
 
                 st.dataframe(tabla_estilizada, hide_index=True, use_container_width=True, height=altura)
+
+            # --- RESULTADOS POR FECHA ---
+            with tab_res:
+                st.subheader("Resultados por Fecha")
+                
+                # Intentar detectar la columna que representa la "Fecha" (ronda/instancia)
+                # Buscamos nombres comunes en planillas de rugby
+                col_ronda = None
+                for c in ["Instancia", "Nro.", "Nro", "Fecha"]:
+                    if c in df_raw_data.columns and c != "Fecha y Hora":
+                        col_ronda = c
+                        break
+                
+                if col_ronda:
+                    # Obtener valores únicos y ordenarlos (asumiendo que pueden ser strings o números)
+                    opciones_ronda = sorted(df_raw_data[col_ronda].unique(), key=lambda x: str(x))
+                    
+                    # Seleccionar por defecto la última fecha que tenga resultados cerrados
+                    df_cerrados = df_raw_data[df_raw_data["Estado"].str.startswith("Cerrado", na=False)]
+                    default_idx = 0
+                    if not df_cerrados.empty:
+                        ultima_ronda_cerrada = df_cerrados[col_ronda].iloc[-1]
+                        if ultima_ronda_cerrada in opciones_ronda:
+                            default_idx = opciones_ronda.index(ultima_ronda_cerrada)
+
+                    ronda_sel = st.selectbox("Seleccioná la Fecha / Instancia:", opciones_ronda, index=default_idx)
+                    
+                    df_ronda = df_raw_data[df_raw_data[col_ronda] == ronda_sel].copy()
+                    
+                    st.markdown(f"**Partidos de la {ronda_sel}**")
+                    
+                    for _, row in df_ronda.iterrows():
+                        loc = row["Local"]
+                        vis = row["Visitante"]
+                        est = row["Estado"]
+                        resL = row["ResultadoL"]
+                        resV = row["ResultadoV"]
+                        fecha_h = row["Fecha y Hora"]
+                        
+                        if est.startswith("Cerrado"):
+                            # Partido Jugado
+                            pL, _ = parse_resultado(resL)
+                            pV, _ = parse_resultado(resV)
+                            
+                            # Estilo de tarjeta (usamos empate/gris para no sesgar por equipo en esta vista general)
+                            res_class = "resultado-empate"
+                            score_disp = f"{int(pL) if pL is not None else 0} - {int(pV) if pV is not None else 0}"
+                            meta_disp = "Finalizado"
+                        else:
+                            # Partido Pendiente
+                            res_class = "na-card"
+                            score_disp = "vs"
+                            meta_disp = fecha_h
+                        
+                        st.markdown(f"""
+                        <div class="result-card {res_class if est.startswith('Cerrado') else ''}" style="{'background: rgba(255,255,255,0.02); border-left: 4px solid rgba(255,255,255,0.1);' if not est.startswith('Cerrado') else ''}">
+                            <div class="result-meta">{meta_disp}</div>
+                            <div class="result-teams">
+                                <span class="result-equipo" style="text-align: left;">{loc}</span>
+                                <span class="result-score">{score_disp}</span>
+                                <span class="result-rival" style="text-align: right;">{vis}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No se encontró una columna de 'Instancia' o 'Nro.' para agrupar los partidos por fecha.")
 
             # --- PARTIDOS PENDIENTES ---
             with tab2:
