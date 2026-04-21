@@ -292,9 +292,9 @@ st.set_page_config(page_title="Rugby Juveniles", layout="wide")
 # Unified CSS for premium mobile-first experience
 st.markdown("""
     <style>
-        /* Aggressive Streamlit padding removal for compact header */
+        /* Streamlit padding — enough to clear the top bar */
         .block-container {
-            padding-top: 1rem !important;
+            padding-top: 2.5rem !important;
             padding-bottom: 0 !important;
         }
         header[data-testid="stHeader"] {
@@ -303,15 +303,6 @@ st.markdown("""
         /* Reduce gap between elements globally */
         .stElementContainer {
             margin-bottom: -0.25rem;
-        }
-        /* Compact title */
-        h1 {
-            font-size: 1.4rem !important;
-            margin-bottom: 0.25rem !important;
-            padding-top: 0 !important;
-        }
-        @media (min-width: 768px) {
-            h1 { font-size: 1.8rem !important; }
         }
 
         /* 5. Container responsive */
@@ -582,8 +573,6 @@ if "ano_nac_seleccionado_str" not in st.session_state:
     st.session_state["ano_nac_seleccionado_str"] = default_year_str
 
 ano_nac_seleccionado_str = st.session_state["ano_nac_seleccionado_str"]
-
-st.title(f"Rugby Juveniles — {ano_nac_seleccionado_str}")
 
 # Selector funcional (radio estilizado como pills por CSS)
 selected = st.radio(
