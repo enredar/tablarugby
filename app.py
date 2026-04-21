@@ -262,11 +262,11 @@ def predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_res
 
     confianza_pct = min(conf_datos + conf_hist + conf_consist, 100)
     if confianza_pct >= 70:
-        nivel_confianza = "🟢 Alta"
+        nivel_confianza = "Alta"
     elif confianza_pct >= 40:
-        nivel_confianza = "🟡 Media"
+        nivel_confianza = "Media"
     else:
-        nivel_confianza = "🔴 Baja"
+        nivel_confianza = "Baja"
 
     return {
         "pred_local": pred_l_final,
@@ -289,18 +289,218 @@ def predecir_resultado(local, visitante, tabla_posiciones, df_jugados, parse_res
 st.set_page_config(page_title="Rugby Juveniles", layout="wide")
 
 # Estilo para centrar el contenido y limitar el ancho al 80%
+# Unified CSS for premium mobile-first experience
 st.markdown("""
     <style>
+        /* 5. Container responsive */
         .main-container {
-            max-width: 80%;
+            max-width: 95%;
             margin: 0 auto;
-            padding: 2rem 1rem;
+            padding: 1rem 0.5rem;
+        }
+        @media (min-width: 768px) {
+            .main-container {
+                max-width: 80%;
+                padding: 2rem 1rem;
+            }
+        }
+
+        /* 4. Radio buttons — touch target mínimo 44px */
+        div[role="radiogroup"] label {
+            min-height: 44px;
+            min-width: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+        div[role="radiogroup"] label > div:first-child {
+            min-width: 20px;
+            min-height: 20px;
+        }
+
+        /* 10. Streamlit Tabs — más grandes y táctiles */
+        button[data-baseweb="tab"] {
+            min-height: 44px;
+            padding: 0.5rem 1rem;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        @media (max-width: 480px) {
+            button[data-baseweb="tab"] {
+                padding: 0.4rem 0.6rem;
+                font-size: 0.8rem;
+            }
+        }
+
+        /* 10. Multiselect chips — touch friendly */
+        span[data-baseweb="tag"] {
+            min-height: 32px;
+            padding: 0.25rem 0.5rem;
+        }
+
+        /* 10. Expanders — touch target */
+        details summary {
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        /* 10. Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+
+        /* 10. Base typography */
+        .stMarkdown, .stText, p, span {
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        /* 7. Match Cards (La bola de cristal) */
+        .match-card {
+            background: linear-gradient(135deg, rgba(30,30,50,0.6) 0%, rgba(40,40,70,0.4) 100%);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px;
+            padding: 1.2rem 1.5rem;
+            margin-bottom: 1rem;
+            backdrop-filter: blur(10px);
+        }
+        .match-date {
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 0.5rem;
+        }
+        .match-teams {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.6rem;
+        }
+        .team-name {
+            font-size: 1.05rem;
+            font-weight: 600;
+            flex: 1;
+        }
+        .team-local { text-align: left; }
+        .team-visitante { text-align: right; }
+        .match-score {
+            font-size: 1.6rem;
+            font-weight: 800;
+            text-align: center;
+            min-width: 100px;
+            letter-spacing: 2px;
+        }
+        .score-favorito { color: #2ecc71; }
+        .score-perdedor { color: rgba(255,255,255,0.5); }
+        .score-empate { color: #f39c12; }
+        .match-bar-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+        .match-bar-local {
+            height: 100%;
+            border-radius: 3px 0 0 3px;
+            float: left;
+        }
+        .match-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.78rem;
+            color: rgba(255,255,255,0.45);
+        }
+        .conf-badge {
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .conf-alta { background: rgba(46,204,113,0.15); color: #2ecc71; }
+        .conf-media { background: rgba(241,196,15,0.15); color: #f1c40f; }
+        .conf-baja { background: rgba(231,76,60,0.15); color: #e74c3c; }
+
+        @media (max-width: 480px) {
+            .match-card {
+                padding: 0.8rem 1rem;
+            }
+            .team-name {
+                font-size: 0.85rem;
+            }
+            .match-score {
+                font-size: 1.2rem;
+                min-width: 70px;
+            }
+            .match-date {
+                font-size: 0.75rem;
+            }
+            .match-footer {
+                font-size: 0.7rem;
+                flex-wrap: wrap;
+                gap: 0.3rem;
+            }
+        }
+
+        /* 8. Result Cards (Análisis por equipo - Resultados Jugados) */
+        .result-card {
+            padding: 0.6rem 1rem;
+            margin-bottom: 0.4rem;
+            border-radius: 8px;
+            border-left: 4px solid;
+            background: rgba(255,255,255,0.03);
+        }
+        .resultado-ganado { border-left-color: #2ecc71; }
+        .resultado-perdido { border-left-color: #e74c3c; }
+        .resultado-empate { border-left-color: #95a5a6; }
+        .result-meta {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 0.2rem;
+        }
+        .result-teams {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+        }
+        .result-score {
+            font-weight: 700;
+            font-size: 1.1rem;
+            min-width: 60px;
+            text-align: center;
+        }
+        .result-equipo { font-weight: 600; flex: 1; }
+        .result-rival { flex: 1; text-align: right; color: rgba(255,255,255,0.7); }
+
+        @media (max-width: 480px) {
+            .result-teams { font-size: 0.85rem; }
+            .result-score { font-size: 1rem; min-width: 50px; }
+        }
+
+        .na-card {
+            background: rgba(30,30,50,0.3);
+            border: 1px dashed rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            color: rgba(255,255,255,0.4);
         }
     </style>
-    <div class="main-container">
 """, unsafe_allow_html=True)
 
-st.title("🏉 Tabla de Posiciones - Rugby Juveniles")
+st.markdown('<div class="main-container">', unsafe_allow_html=True)
+
+st.title("Tabla de Posiciones — Rugby Juveniles")
 
 
 # --- Conexión a Google Sheets ---
@@ -332,7 +532,7 @@ if not default_year:
     st.error("No se pudieron cargar las divisiones desde Google Sheets y no hay fallback. Verifica la configuración.")
     st.stop()
 
-st.markdown("### 📅 Seleccioná el Año de Nacimiento:")
+st.markdown("### Seleccioná el Año de Nacimiento:")
 
 # --- Inicio del bloque modificado ---
 
@@ -397,20 +597,20 @@ if ano_nac_seleccionado_str:
             st.error(f"La planilla para el año {ano_nac_seleccionado_str} no tiene todas las columnas esperadas: {expected_cols}")
         else:
             # Texto instructivo (puedes usarlo junto con el CSS)
-            st.caption("💡 Navega entre las diferentes secciones haciendo clic en los títulos de abajo...")
+            st.caption("Navega entre las diferentes secciones haciendo clic en los títulos de abajo...")
           
             # Creamos las pestañas
             tab1, tab3, tab2, tab5, tab4 = st.tabs([
-                "📊 Tabla de Posiciones", 
-                "📈 Análisis por equipo", 
-                "📅 Partidos Pendientes", 
-                "🟦 Tabla de Tarjetas",
-                "🔮 La bola de cristal..."
+                "Posiciones", 
+                "Equipos", 
+                "Pendientes", 
+                "Tarjetas",
+                "Predicciones"
             ])
             # --- TABLA DE POSICIONES ---
             with tab1:
                 df_jugados = df_raw_data[df_raw_data["Estado"].str.startswith("Cerrado")].copy()
-                st.subheader("📊 Tabla de posiciones")
+                st.subheader("Tabla de posiciones")
                 st.markdown("&nbsp;") # This adds a small, non-breaking space
                 tabla_posiciones = procesar_partidos(df_jugados)
 
@@ -430,7 +630,7 @@ if ano_nac_seleccionado_str:
 
             # --- PARTIDOS PENDIENTES ---
             with tab2:
-                st.subheader("📅 Partidos pendientes")
+                st.subheader("Partidos pendientes")
 
                 df_pendientes = df_raw_data[df_raw_data["Estado"] == "Pendiente"].copy()
                 df_pendientes["Fecha_dt"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce", dayfirst=True)
@@ -441,7 +641,7 @@ if ano_nac_seleccionado_str:
 
                 # 1. Filtro Inteligente Nativo
                 clubes_seleccionados = st.multiselect(
-                    "🔎 Filtrar por clubes (dejá vacío para ver todos):", 
+                    "Filtrar por clubes (dejá vacío para ver todos):", 
                     options=clubes_unicos, 
                     default=[]
                 )
@@ -459,14 +659,14 @@ if ano_nac_seleccionado_str:
                 # 2. Panel de Métricas Rápidas (KPIs)
                 col_metric_1, col_metric_2 = st.columns(2)
                 with col_metric_1:
-                    st.metric("🏉 Partidos Pendientes Totales", len(df_filtrado))
+                    st.metric("Partidos Pendientes Totales", len(df_filtrado))
                 with col_metric_2:
                     if not df_filtrado.empty and not df_filtrado["Fecha_dt"].dropna().empty:
                         prox_fecha = df_filtrado["Fecha_dt"].dropna().min()
                         prox_partido_str = prox_fecha.strftime('%d/%m/%Y %H:%M')
                     else:
                         prox_partido_str = "N/A"
-                    st.metric("📆 Próximo Partido", prox_partido_str)
+                    st.metric("Próximo Partido", prox_partido_str)
 
                 # 3. Mejoras Visuales en el DataFrame
                 dias_espanol = {
@@ -503,7 +703,7 @@ if ano_nac_seleccionado_str:
 
             # ---------- Análisis por equipo ----------
             with tab3:
-                st.subheader("📈 Análisis por equipo")
+                st.subheader("Análisis por equipo")
 
                 equipos = sorted(tabla_posiciones["Equipo"].unique())
                 # Seleccionar "UNIVERSITARIO" por defecto si existe, si no el primero.
@@ -519,15 +719,15 @@ if ano_nac_seleccionado_str:
                         jugados_equipo["Puntos Equipo"] = jugados_equipo.apply(
                             lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[0],
                             axis=1
-                        )
+                        ).fillna(0)
                         jugados_equipo["Puntos Rival"] = jugados_equipo.apply(
                             lambda row: parse_resultado(row["ResultadoV"] if row["Local"] == equipo_sel else row["ResultadoL"])[0],
                             axis=1
-                        )
+                        ).fillna(0)
                         jugados_equipo["Pts Torneo Equipo"] = jugados_equipo.apply(
                             lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[1],
                             axis=1
-                        )
+                        ).fillna(0)
 
                         # Cálculo de victorias, empates, derrotas
                         victorias = (jugados_equipo["Puntos Equipo"] > jugados_equipo["Puntos Rival"]).sum()
@@ -541,56 +741,54 @@ if ano_nac_seleccionado_str:
                         prom_puntos_contra = jugados_equipo['Puntos Rival'].mean() if total > 0 else 0
                         dif_prom_partido = prom_puntos_favor - prom_puntos_contra
 
-                        # Dividir en dos columnas principales: una para datos y otra para el gráfico
-                        col_datos, col_grafico = st.columns([0.6, 0.4]) 
+                        # Flujo vertical — métricas primero, gráfico después
+                        st.markdown(f"#### Estadísticas de {equipo_sel}")
+                        
+                        m1, m2, m3, m4 = st.columns(4)
+                        m1.metric("Partidos jugados", total)
+                        m2.metric("Pts. torneo", puntos_totales_torneo_equipo)
+                        m3.metric("Ganados", f"{victorias} ({victorias/total:.0%})" if total > 0 else "0")
+                        m4.metric("Perdidos", f"{derrotas} ({derrotas/total:.0%})" if total > 0 else "0")
 
-                        with col_datos:
-                            st.markdown(f"#### Estadísticas de {equipo_sel}")
+                        m5, m6, m7 = st.columns(3)
+                        m5.metric("Empatados", f"{empates} ({empates/total:.0%})" if total > 0 else "0")
+                        m6.metric("Prom. PF/PC", f"{prom_puntos_favor:.1f} / {prom_puntos_contra:.1f}")
+                        m7.metric("Dif. Promedio", f"{dif_prom_partido:+.1f}", delta=f"{dif_prom_partido:+.1f}")
+
+                        st.markdown("#### Distribución de Resultados")
+                        if total > 0: 
+                            # Gráfico interactivo con px.pie en lugar de plt
+                            df_pie = pd.DataFrame({
+                                "Resultado": ["Ganados", "Empatados", "Perdidos"],
+                                "Cantidad": [victorias, empates, derrotas]
+                            })
+                            # Filtramos para que no salgan porciones con valor 0
+                            df_pie = df_pie[df_pie["Cantidad"] > 0]
                             
-                            # Crear dos sub-columnas dentro de col_datos para las métricas
-                            sub_col_datos1, sub_col_datos2 = st.columns(2)
-
-                            with sub_col_datos1:
-                                st.metric("🏉 Partidos jugados", total)
-                                st.metric("🔢 Pts. torneo (bonus)", puntos_totales_torneo_equipo)
-                                st.metric("📊 Prom. P. Favor / Contra", f"{prom_puntos_favor:.1f} / {prom_puntos_contra:.1f}")
-                                # Nueva métrica con color dinámico usando delta de Streamlit
-                                st.metric("⚖️ Dif. Promedio por Partido", f"{dif_prom_partido:+.1f}", delta=f"{dif_prom_partido:+.1f}")
-                            
-                            with sub_col_datos2:
-                                st.metric("✅ Ganados", f"{victorias} ({victorias/total:.0%})" if total > 0 else "0 (0%)")
-                                st.metric("➖ Empatados", f"{empates} ({empates/total:.0%})" if total > 0 else "0 (0%)")
-                                st.metric("❌ Perdidos", f"{derrotas} ({derrotas/total:.0%})" if total > 0 else "0 (0%)")
-
-                        with col_grafico:
-                            st.markdown("#### Distribución de Resultados")
-                            if total > 0: 
-                                # Gráfico interactivo con px.pie en lugar de plt
-                                df_pie = pd.DataFrame({
-                                    "Resultado": ["Ganados", "Empatados", "Perdidos"],
-                                    "Cantidad": [victorias, empates, derrotas]
-                                })
-                                # Filtramos para que no salgan porciones con valor 0
-                                df_pie = df_pie[df_pie["Cantidad"] > 0]
-                                
-                                fig1 = px.pie(
-                                    df_pie, 
-                                    values="Cantidad", 
-                                    names="Resultado",
-                                    color="Resultado",
-                                    color_discrete_map={"Ganados": "#2ecc71", "Empatados": "#95a5a6", "Perdidos": "#e74c3c"}
-                                )
-                                fig1.update_traces(
-                                    textinfo='percent+value',
-                                    hovertemplate='<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>'
-                                )
-                                fig1.update_layout(
-                                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-                                    margin=dict(t=20, b=20, l=20, r=20)
-                                )
-                                st.plotly_chart(fig1, use_container_width=True)
-                            else:
-                                st.info("No hay partidos jugados para mostrar en el gráfico.")
+                            fig1 = px.pie(
+                                df_pie, 
+                                values="Cantidad", 
+                                names="Resultado",
+                                color="Resultado",
+                                color_discrete_map={"Ganados": "#2ecc71", "Empatados": "#95a5a6", "Perdidos": "#e74c3c"}
+                            )
+                            fig1.update_traces(
+                                textinfo='percent+value',
+                                hovertemplate='<b>%{label}</b><br>Cantidad: %{value}<br>Porcentaje: %{percent}<extra></extra>'
+                            )
+                            fig1.update_layout(
+                                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                                margin=dict(t=20, b=20, l=20, r=20),
+                                dragmode=False
+                            )
+                            st.plotly_chart(fig1, use_container_width=True, config={
+                                'displayModeBar': False,
+                                'scrollZoom': False,
+                                'staticPlot': False,
+                                'responsive': True
+                            })
+                        else:
+                            st.info("No hay partidos jugados para mostrar en el gráfico.")
                     else:
                         st.info(f"No se encontraron partidos jugados para {equipo_sel}.")
 
@@ -645,14 +843,55 @@ if ano_nac_seleccionado_str:
                     # Mejoras estéticas y layout de Plotly
                     fig2.update_layout(
                         title=dict(text=f"Evolución de Puntos por Partido - {equipo_sel}"),
-                        xaxis_title="Fecha y Rival",
+                        xaxis=dict(
+                            tickangle=-45,
+                            tickfont=dict(size=10),
+                            title=None
+                        ),
                         yaxis_title="Puntos",
                         legend_title="Tipo",
                         hovermode="x unified",
-                        margin=dict(t=50, b=40, l=40, r=20)
+                        margin=dict(t=50, b=40, l=40, r=20),
+                        dragmode=False
                     )
 
-                    st.plotly_chart(fig2, use_container_width=True)
+                    st.plotly_chart(fig2, use_container_width=True, config={
+                        'displayModeBar': False,
+                        'scrollZoom': False,
+                        'staticPlot': False,
+                        'responsive': True
+                    })
+
+                    # --- Sección de Resultados Jugados ---
+                    st.markdown("#### Resultados Jugados")
+
+                    for _, row in jugados_equipo.iterrows():
+                        rival = row["Rival"]
+                        pf = row["Puntos Equipo"]
+                        pc = row["Puntos Rival"]
+                        fecha = row["Fecha"]
+                        es_local = row["Local"] == equipo_sel
+                        condicion = "Local" if es_local else "Visitante"
+                        
+                        if pf > pc:
+                            resultado_class = "resultado-ganado"
+                        elif pf < pc:
+                            resultado_class = "resultado-perdido"
+                        else:
+                            resultado_class = "resultado-empate"
+                        
+                        fecha_str = fecha.strftime('%d/%m') if pd.notna(fecha) else "-"
+                        
+                        st.markdown(f"""
+                        <div class="result-card {resultado_class}">
+                            <div class="result-meta">{fecha_str} · {condicion}</div>
+                            <div class="result-teams">
+                                <span class="result-equipo">{equipo_sel}</span>
+                                <span class="result-score">{int(pf)} - {int(pc)}</span>
+                                <span class="result-rival">{rival}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                     # Definir siempre esta variable, esté o no en partidos pendientes
                     equipo_seleccionado = equipo_sel
@@ -662,7 +901,7 @@ if ano_nac_seleccionado_str:
                     ].copy()
 
                     if not pendientes_equipo.empty:
-                        st.subheader("📅 Partidos pendientes del equipo")
+                        st.subheader("Partidos pendientes del equipo")
 
                         equipo_seleccionado = equipo_sel  # Asegurate de que esta variable tenga el nombre del equipo
 
@@ -705,7 +944,7 @@ if ano_nac_seleccionado_str:
                     df_tarjetas_equipo = df_tarjetas[df_tarjetas["Equipo"] == equipo_seleccionado]
 
                     if not df_tarjetas_equipo.empty:
-                        st.subheader("🟨🟥 Incidencias disciplinarias")
+                        st.subheader("Incidencias disciplinarias")
                         
                         # Mostrar resumen rápido
                         total_amarillas = df_tarjetas_equipo["Incidencia"].str.contains("amarilla", case=False).sum()
@@ -730,17 +969,17 @@ if ano_nac_seleccionado_str:
 
             # ---------- Predicción de partidos pendientes ----------
             with tab4:        
-                    st.subheader("🔮 La bola de cristal... puede fallar! (y lo va a hacer!)")
+                    st.subheader("La bola de cristal... puede fallar!")
 
                     # --- Explicación del modelo ---
-                    with st.expander("📖 ¿Cómo funciona el modelo?"):
+                    with st.expander("¿Cómo funciona el modelo?"):
                         st.markdown("""
                         El modelo de predicción combina **4 factores** para estimar el resultado:
 
-                        1. **📊 Promedio Ponderado por Recencia** — Los últimos partidos pesan más que los primeros del año (decay: 0.85).
-                        2. **💪 Dificultad de Rivales (SoS)** — Si un equipo le ganó a rivales fuertes, su poder predictivo sube.
-                        3. **🤝 Historial Directo** — Si los equipos ya jugaron entre sí, el modelo ajusta según ese comportamiento específico.
-                        4. **🏠 Ventaja de Localía** — El equipo local recibe un bonus del ~5%.
+                        1. **Promedio Ponderado por Recencia** — Los últimos partidos pesan más que los primeros del año (decay: 0.85).
+                        2. **Dificultad de Rivales (SoS)** — Si un equipo le ganó a rivales fuertes, su poder predictivo sube.
+                        3. **Historial Directo** — Si los equipos ya jugaron entre sí, el modelo ajusta según ese comportamiento específico.
+                        4. **Ventaja de Localía** — El equipo local recibe un bonus del ~5%.
 
                         **Confianza**: Se calcula según la cantidad de datos disponibles, consistencia de resultados e historial directo.
                         """)
@@ -757,7 +996,7 @@ if ano_nac_seleccionado_str:
 
                         # --- Filtro con multiselect ---
                         clubes_pred_activos = st.multiselect(
-                            "🔎 Filtrar clubes para predicción (dejá vacío para ver todos):",
+                            "Filtrar clubes para predicción (dejá vacío para ver todos):",
                             options=clubes_unicos_pred,
                             default=[],
                             key="multiselect_pred_clubes"
@@ -799,9 +1038,9 @@ if ano_nac_seleccionado_str:
                             pct_local_fav = (fav_local / len(pred_validas) * 100) if pred_validas else 0
 
                             kpi1, kpi2, kpi3 = st.columns(3)
-                            kpi1.metric("🔮 Predicciones", total_pred)
-                            kpi2.metric("🏠 Favoritos Locales", f"{pct_local_fav:.0f}%")
-                            kpi3.metric("📈 Confianza Promedio", f"{avg_conf:.0f}%")
+                            kpi1.metric("Predicciones", total_pred)
+                            kpi2.metric("Favoritos Locales", f"{pct_local_fav:.0f}%")
+                            kpi3.metric("Confianza Promedio", f"{avg_conf:.0f}%")
 
                             st.markdown("---")
 
@@ -811,84 +1050,7 @@ if ano_nac_seleccionado_str:
                                 "Thursday": "Jueves", "Friday": "Viernes", "Saturday": "Sábado", "Sunday": "Domingo"
                             }
 
-                            # --- CSS para Match Cards ---
-                            st.markdown("""
-                            <style>
-                            .match-card {
-                                background: linear-gradient(135deg, rgba(30,30,50,0.6) 0%, rgba(40,40,70,0.4) 100%);
-                                border: 1px solid rgba(255,255,255,0.08);
-                                border-radius: 12px;
-                                padding: 1.2rem 1.5rem;
-                                margin-bottom: 1rem;
-                                backdrop-filter: blur(10px);
-                            }
-                            .match-date {
-                                font-size: 0.8rem;
-                                color: rgba(255,255,255,0.5);
-                                margin-bottom: 0.5rem;
-                            }
-                            .match-teams {
-                                display: flex;
-                                align-items: center;
-                                justify-content: space-between;
-                                margin-bottom: 0.6rem;
-                            }
-                            .team-name {
-                                font-size: 1.05rem;
-                                font-weight: 600;
-                                flex: 1;
-                            }
-                            .team-local { text-align: left; }
-                            .team-visitante { text-align: right; }
-                            .match-score {
-                                font-size: 1.6rem;
-                                font-weight: 800;
-                                text-align: center;
-                                min-width: 100px;
-                                letter-spacing: 2px;
-                            }
-                            .score-favorito { color: #2ecc71; }
-                            .score-perdedor { color: rgba(255,255,255,0.5); }
-                            .score-empate { color: #f39c12; }
-                            .match-bar-container {
-                                width: 100%;
-                                height: 6px;
-                                background: rgba(255,255,255,0.08);
-                                border-radius: 3px;
-                                overflow: hidden;
-                                margin-bottom: 0.5rem;
-                            }
-                            .match-bar-local {
-                                height: 100%;
-                                border-radius: 3px 0 0 3px;
-                                float: left;
-                            }
-                            .match-footer {
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                font-size: 0.78rem;
-                                color: rgba(255,255,255,0.45);
-                            }
-                            .conf-badge {
-                                padding: 2px 10px;
-                                border-radius: 10px;
-                                font-size: 0.75rem;
-                                font-weight: 600;
-                            }
-                            .conf-alta { background: rgba(46,204,113,0.15); color: #2ecc71; }
-                            .conf-media { background: rgba(241,196,15,0.15); color: #f1c40f; }
-                            .conf-baja { background: rgba(231,76,60,0.15); color: #e74c3c; }
-                            .na-card {
-                                background: rgba(30,30,50,0.3);
-                                border: 1px dashed rgba(255,255,255,0.1);
-                                border-radius: 12px;
-                                padding: 1rem 1.5rem;
-                                margin-bottom: 1rem;
-                                color: rgba(255,255,255,0.4);
-                            }
-                            </style>
-                            """, unsafe_allow_html=True)
+                            # CSS removed and unified at start
 
                             # --- Renderizar Match Cards ---
                             for pred_data in predicciones_list:
@@ -900,9 +1062,9 @@ if ano_nac_seleccionado_str:
                                 fecha_dt = pred_data["fecha_dt"]
                                 if pd.notna(fecha_dt):
                                     dia_nombre = dias_es.get(fecha_dt.strftime("%A"), "")
-                                    fecha_str = f"📅 {dia_nombre} {fecha_dt.strftime('%d/%m/%Y %H:%M')}"
+                                    fecha_str = f"{dia_nombre} {fecha_dt.strftime('%d/%m/%Y %H:%M')}"
                                 else:
-                                    fecha_str = f"📅 {pred_data['fecha_raw']}"
+                                    fecha_str = f"{pred_data['fecha_raw']}"
 
                                 if resultado is None:
                                     # Card para predicciones no disponibles
@@ -910,9 +1072,9 @@ if ano_nac_seleccionado_str:
                                     <div class="na-card">
                                         <div class="match-date">{fecha_str}</div>
                                         <div class="match-teams">
-                                            <span class="team-name team-local">🏠 {local_eq}</span>
+                                            <span class="team-name team-local">{local_eq}</span>
                                             <span class="match-score" style="color: rgba(255,255,255,0.3);">? — ?</span>
-                                            <span class="team-name team-visitante">{visitante_eq} ✈️</span>
+                                            <span class="team-name team-visitante">{visitante_eq}</span>
                                         </div>
                                         <div class="match-footer">
                                             <span>Sin datos suficientes para predecir</span>
@@ -961,13 +1123,13 @@ if ano_nac_seleccionado_str:
                                 <div class="match-card">
                                     <div class="match-date">{fecha_str}</div>
                                     <div class="match-teams">
-                                        <span class="team-name team-local">🏠 {local_eq}</span>
+                                        <span class="team-name team-local">{local_eq}</span>
                                         <span class="match-score">
                                             <span class="{score_l_class}">{pred_l}</span>
                                             <span style="color: rgba(255,255,255,0.25); margin: 0 4px;">—</span>
                                             <span class="{score_v_class}">{pred_v}</span>
                                         </span>
-                                        <span class="team-name team-visitante">{visitante_eq} ✈️</span>
+                                        <span class="team-name team-visitante">{visitante_eq}</span>
                                     </div>
                                     <div class="match-bar-container">
                                         <div class="match-bar-local" style="width: {pct_local:.1f}%; background: linear-gradient(90deg, {bar_local_color}, {bar_visit_color});"></div>
@@ -996,7 +1158,7 @@ if ano_nac_seleccionado_str:
                                         - Sesgo histórico: `{factores['sesgo_hist_visitante']:+.1f}`
                                         - Partidos jugados: `{factores['partidos_visitante']}`
                                         """)
-                                    st.caption(f"📌 Localía: {factores['localía']}x | Enfrentamientos directos: {factores['historial_directo']}")
+                                    st.caption(f"Localía: {factores['localía']}x | Enfrentamientos directos: {factores['historial_directo']}")
 
             # ---------- TABLA DE TARJETAS ----------
             with tab5:
@@ -1005,7 +1167,7 @@ if ano_nac_seleccionado_str:
                 if df_tarjetas.empty:
                     st.info("No hay registros de tarjetas para esta división.")
                 else:
-                    st.subheader("🟦 Tabla de Disciplina")
+                    st.subheader("Tabla de Disciplina")
 
                     # --- 1. Procesamiento de Datos ---
                     df_tarjetas["Incidencia"] = df_tarjetas["Incidencia"].str.lower().str.strip()
@@ -1017,14 +1179,14 @@ if ano_nac_seleccionado_str:
 
                     # --- 2. Panel de Métricas ---
                     m1, m2, m3 = st.columns(3)
-                    m1.metric("🟨 Amarillas Totales", total_y)
-                    m2.metric("🟥 Rojas Totales", total_r)
-                    m3.metric("🔵 Azules Totales", total_b)
+                    m1.metric("Amarillas Totales", total_y)
+                    m2.metric("Rojas Totales", total_r)
+                    m3.metric("Azules Totales", total_b)
 
                     # --- 3. Filtro por Club ---
                     clubes_con_tarjetas = sorted(df_tarjetas["Equipo"].unique())
                     clubes_sel = st.multiselect(
-                        "🔎 Filtrar por club (dejar vacío para ver todos):", 
+                        "Filtrar por club (dejar vacío para ver todos):", 
                         options=clubes_con_tarjetas, 
                         default=[]
                     )
@@ -1038,9 +1200,9 @@ if ano_nac_seleccionado_str:
                     
                     # Asegurar que existan las columnas incluso si están en 0
                     mapeo_columnas = {
-                        "amarilla": "🟨 Amarillas", 
-                        "roja": "🟥 Rojas", 
-                        "azul": "🔵 Azules"
+                        "amarilla": "Amarillas", 
+                        "roja": "Rojas", 
+                        "azul": "Azules"
                     }
                     
                     for col_original, col_nueva in mapeo_columnas.items():
@@ -1049,14 +1211,14 @@ if ano_nac_seleccionado_str:
                         resumen = resumen.rename(columns={col_original: col_nueva})
 
                     # Ordenar por gravedad (Rojas valen más puntos en un ranking inverso de disciplina)
-                    resumen["_score"] = (resumen["🟨 Amarillas"] * 1) + (resumen["🟥 Rojas"] * 5) + (resumen["🔵 Azules"] * 2)
+                    resumen["_score"] = (resumen["Amarillas"] * 1) + (resumen["Rojas"] * 5) + (resumen["Azules"] * 2)
                     resumen = resumen.sort_values("_score", ascending=False).drop(columns=["_score"])
 
                     # --- 5. Gráfico de Conducta (Plotly) ---
                     st.markdown("#### Conducta por Club")
                     if not resumen.empty:
                         # Preparar datos para Plotly format largo
-                        columnas_cards = ["🟨 Amarillas", "🔵 Azules", "🟥 Rojas"]
+                        columnas_cards = ["Amarillas", "Azules", "Rojas"]
                         df_plot = resumen.melt(id_vars="Equipo", value_vars=columnas_cards, var_name="Tipo", value_name="Cantidad")
                         
                         fig_cards = px.bar(
@@ -1066,9 +1228,9 @@ if ano_nac_seleccionado_str:
                             color="Tipo",
                             orientation='h',
                             color_discrete_map={
-                                "🟨 Amarillas": "#D4AF37", 
-                                "🟥 Rojas": "#e74c3c", 
-                                "🔵 Azules": "#3498db"
+                                "Amarillas": "#D4AF37", 
+                                "Rojas": "#e74c3c", 
+                                "Azules": "#3498db"
                             },
                         )
                         fig_cards.update_layout(
@@ -1077,9 +1239,15 @@ if ano_nac_seleccionado_str:
                             yaxis={'categoryorder':'total ascending'},
                             height=max(min(len(resumen) * 35 + 100, 600), 300),
                             margin=dict(l=20, r=20, t=20, b=20),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                            dragmode=False
                         )
-                        st.plotly_chart(fig_cards, use_container_width=True)
+                        st.plotly_chart(fig_cards, use_container_width=True, config={
+                            'displayModeBar': False,
+                            'scrollZoom': False,
+                            'staticPlot': False,
+                            'responsive': True
+                        })
 
                     # --- 6. Tabla Detallada ---
                     st.markdown("#### Detalle por Equipo")
