@@ -748,14 +748,10 @@ if ano_nac_seleccionado_str:
                         st.session_state['fecha_sel_pop'] = opciones_fecha[default_idx] if opciones_fecha else None
                     
                     with st.popover(f"📅 Fecha: {st.session_state['fecha_sel_pop']}", use_container_width=True):
-                        fecha_sel_new = st.radio(
-                            "Seleccioná la fecha:",
-                            opciones_fecha,
-                            index=opciones_fecha.index(st.session_state['fecha_sel_pop']) if st.session_state['fecha_sel_pop'] in opciones_fecha else 0
-                        )
-                        if fecha_sel_new != st.session_state['fecha_sel_pop']:
-                            st.session_state['fecha_sel_pop'] = fecha_sel_new
-                            st.rerun()
+                        for f_op in opciones_fecha:
+                            if st.button(f_op, use_container_width=True, key=f"btn_fecha_{f_op}"):
+                                st.session_state['fecha_sel_pop'] = f_op
+                                st.rerun()
                     
                     fecha_sel = st.session_state['fecha_sel_pop']
                     
@@ -892,14 +888,10 @@ if ano_nac_seleccionado_str:
                     st.session_state['equipo_sel_pop'] = equipos[default_index] if equipos else None
                 
                 with st.popover(f"📍 Equipo: {st.session_state['equipo_sel_pop']}", use_container_width=True):
-                    equipo_sel_new = st.radio(
-                        "Seleccioná un equipo:",
-                        equipos,
-                        index=equipos.index(st.session_state['equipo_sel_pop']) if st.session_state['equipo_sel_pop'] in equipos else 0
-                    )
-                    if equipo_sel_new != st.session_state['equipo_sel_pop']:
-                        st.session_state['equipo_sel_pop'] = equipo_sel_new
-                        st.rerun()
+                    for e_op in equipos:
+                        if st.button(e_op, use_container_width=True, key=f"btn_equipo_{e_op}"):
+                            st.session_state['equipo_sel_pop'] = e_op
+                            st.rerun()
                 
                 equipo_sel = st.session_state['equipo_sel_pop']
 
