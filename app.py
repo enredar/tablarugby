@@ -521,6 +521,44 @@ st.markdown("""
             .result-score { font-size: 1rem; min-width: 50px; }
         }
 
+        /* Streamlit Tabs — prominent navigation bar */
+        div[data-testid="stTabs"] {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            padding: 4px;
+            margin: 0.5rem 0 1.5rem 0;
+            border: 1px solid rgba(255,255,255,0.08);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+            gap: 2px;
+            background-color: transparent !important;
+        }
+        button[data-baseweb="tab"] {
+            border-radius: 8px !important;
+            margin: 0 !important;
+            border: none !important;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            color: rgba(255,255,255,0.5) !important;
+            flex: 1; 
+            min-width: 90px;
+            height: 40px;
+            background-color: transparent !important;
+        }
+        button[data-baseweb="tab"]:hover {
+            color: #ffffff !important;
+            background-color: rgba(255,255,255,0.05) !important;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background-color: rgba(255, 75, 75, 0.15) !important;
+            color: #ff4b4b !important;
+            font-weight: 700 !important;
+        }
+        /* Hide the default underline */
+        div[data-baseweb="tab-highlight"] {
+            display: none !important;
+        }
+
         .na-card {
             background: rgba(30,30,50,0.3);
             border: 1px dashed rgba(255,255,255,0.1);
@@ -851,6 +889,10 @@ if ano_nac_seleccionado_str:
                             lambda row: parse_resultado(row["ResultadoL"] if row["Local"] == equipo_sel else row["ResultadoV"])[1],
                             axis=1
                         ).fillna(0)
+                        jugados_equipo["Pts Torneo Rival"] = jugados_equipo.apply(
+                            lambda row: parse_resultado(row["ResultadoV"] if row["Local"] == equipo_sel else row["ResultadoL"])[1],
+                            axis=1
+                        ).fillna(0)
 
                         # Cálculo de victorias, empates, derrotas
                         victorias = (jugados_equipo["Puntos Equipo"] > jugados_equipo["Puntos Rival"]).sum()
@@ -1016,14 +1058,27 @@ if ano_nac_seleccionado_str:
                         
                         dias_abrev_rc = {"Monday": "Lun", "Tuesday": "Mar", "Wednesday": "Mié", "Thursday": "Jue", "Friday": "Vie", "Saturday": "Sáb", "Sunday": "Dom"}
                         fecha_str = f"{dias_abrev_rc.get(fecha.strftime('%A'), '')} {fecha.strftime('%d/%m')}" if pd.notna(fecha) else "-"
+
+                        pts_e = row["Pts Torneo Equipo"]
+                        pts_r = row["Pts Torneo Rival"]
+                        
+                        ganador_e = pf > pc
+                        ganador_r = pc > pf
+                        
+                        equipo_html = f"<b>{equipo_sel}</b>" if ganador_e else equipo_sel
+                        rival_html = f"<b>{rival}</b>" if ganador_r else rival
                         
                         st.markdown(f"""
                         <div class="result-card {resultado_class}">
                             <div class="result-meta">{fecha_str} · {condicion}</div>
                             <div class="result-teams">
-                                <span class="result-equipo" style="text-align: left; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{equipo_sel}</span>
+                                <span class="result-equipo" style="text-align: left; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    {equipo_html} <span style="opacity: 0.6; font-size: 0.8rem;">({int(pts_e)})</span>
+                                </span>
                                 <span class="result-score" style="flex: 1;">{int(pf)} - {int(pc)}</span>
-                                <span class="result-rival" style="text-align: right; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{rival}</span>
+                                <span class="result-rival" style="text-align: right; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                    <span style="opacity: 0.6; font-size: 0.8rem;">({int(pts_r)})</span> {rival_html}
+                                </span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
