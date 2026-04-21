@@ -563,6 +563,28 @@ st.markdown("""
             display: none !important;
         }
 
+        /* Snapier Expanders */
+        div[data-testid="stExpander"] {
+            border: 1px solid rgba(255,255,255,0.08) !important;
+            background: rgba(255,255,255,0.02) !important;
+            border-radius: 10px !important;
+            transition: all 0.15s ease !important;
+        }
+        div[data-testid="stExpander"] > details > summary {
+            padding: 0.5rem 1rem !important;
+            color: rgba(255,255,255,0.8) !important;
+        }
+        div[data-testid="stExpander"] > details > summary:hover {
+            color: #ff4b4b !important;
+        }
+        
+        /* Compact Buttons inside selectors */
+        div[data-testid="stExpander"] button {
+            padding: 0.2rem 0.5rem !important;
+            min-height: 32px !important;
+            font-size: 0.85rem !important;
+        }
+
         .na-card {
             background: rgba(30,30,50,0.3);
             border: 1px dashed rgba(255,255,255,0.1);
