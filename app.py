@@ -296,12 +296,12 @@ st.markdown("""
         .main-container {
             max-width: 95%;
             margin: 0 auto;
-            padding: 1rem 0.5rem;
+            padding: 0.5rem 0.5rem;
         }
         @media (min-width: 768px) {
             .main-container {
                 max-width: 80%;
-                padding: 2rem 1rem;
+                padding: 1.5rem 1rem;
             }
         }
 
@@ -500,7 +500,7 @@ st.markdown("""
 
 st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
-st.title("Tabla de Posiciones — Rugby Juveniles")
+# El título se mostrará dinámicamente después de la selección para ahorrar espacio
 
 
 # --- Conexión a Google Sheets ---
@@ -532,12 +532,12 @@ if not default_year:
     st.error("No se pudieron cargar las divisiones desde Google Sheets y no hay fallback. Verifica la configuración.")
     st.stop()
 
-st.markdown("### Seleccioná el Año de Nacimiento:")
+# --- Selección de División Compacta ---
 
 # --- Inicio del bloque modificado ---
 
 # Asegurarse de que default_year esté en las opciones para calcular el índice correcto
-# y que todas las opciones sean strings para st.radio
+# y que todas las opciones sean strings para el selector
 options_str = [str(opt) for opt in options_for_selectbox]
 default_year_str = str(default_year)
 
@@ -549,32 +549,30 @@ except ValueError:
         st.error("No hay años disponibles para seleccionar.")
         st.stop() # Detener la ejecución si no hay opciones
 
-# Usar st.radio para la selección
-# El callback actualiza st.session_state inmediatamente cuando cambia la selección
+# Usar st.selectbox para ahorrar espacio vertical en mobile
 def update_selected_year():
-    st.session_state["ano_nac_seleccionado_str"] = st.session_state["radio_year_selector"]
+    st.session_state["ano_nac_seleccionado_str"] = st.session_state["selectbox_year_selector"]
 
-selected_year_from_radio = st.radio(
-    label="Selecciona el año:",  # El label se puede ocultar si se desea
+selected_year_from_selectbox = st.selectbox(
+    label="Categoría / Año de Nacimiento:",
     options=options_str,
     index=default_index,
-    horizontal=True,
-    key="radio_year_selector", # Clave única para el widget
-    on_change=update_selected_year, # Actualiza el session_state cuando cambia
-    label_visibility="collapsed" # Oculta el label "Selecciona el año:"
+    key="selectbox_year_selector",
+    on_change=update_selected_year
 )
 
-# Establecer el valor inicial en session_state si aún no existe o si el radio lo actualizó
+# Establecer el valor inicial en session_state
 if "ano_nac_seleccionado_str" not in st.session_state:
-    st.session_state["ano_nac_seleccionado_str"] = selected_year_from_radio
-elif st.session_state["radio_year_selector"] != st.session_state.get("ano_nac_seleccionado_str"):
-    # Esto es por si el estado del radio y el session_state se desincronizan
+    st.session_state["ano_nac_seleccionado_str"] = selected_year_from_selectbox
+elif st.session_state["selectbox_year_selector"] != st.session_state.get("ano_nac_seleccionado_str"):
+    # Esto es por si el estado del selector y el session_state se desincronizan
     # (aunque on_change debería mantenerlos sincronizados)
-    st.session_state["ano_nac_seleccionado_str"] = st.session_state["radio_year_selector"]
+    st.session_state["ano_nac_seleccionado_str"] = st.session_state["selectbox_year_selector"]
 
 
 # Obtener el valor seleccionado de session_state para el resto de tu lógica
 ano_nac_seleccionado_str = st.session_state.get("ano_nac_seleccionado_str", default_year_str if options_str else None)
+st.title(f"Tabla de Posiciones — {ano_nac_seleccionado_str}")
 
 # --- Fin del bloque modificado ---
 
@@ -582,8 +580,6 @@ ano_nac_seleccionado_str = st.session_state.get("ano_nac_seleccionado_str", defa
 if "estado_anno_anterior" not in st.session_state or st.session_state["estado_anno_anterior"] != ano_nac_seleccionado_str:
     st.session_state["clubes_checklist"] = {}
     st.session_state["estado_anno_anterior"] = ano_nac_seleccionado_str
-
-st.markdown("---")
 
 # --- Carga de Datos para la División Seleccionada ---
 if ano_nac_seleccionado_str:
