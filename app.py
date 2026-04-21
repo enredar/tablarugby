@@ -529,6 +529,40 @@ st.markdown("""
             margin-bottom: 1rem;
             color: rgba(255,255,255,0.4);
         }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.6rem;
+            margin: 1rem 0;
+        }
+        @media (min-width: 768px) {
+            .metrics-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+        .metric-card {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            padding: 0.7rem 0.4rem;
+            text-align: center;
+        }
+        .metric-card-label {
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 0.2rem;
+            text-transform: uppercase;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .metric-card-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -833,17 +867,26 @@ if ano_nac_seleccionado_str:
                         # Flujo vertical — métricas primero, gráfico después
                         st.markdown(f"#### Estadísticas de {equipo_sel}")
                         
-                        m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("Jugados", total)
-                        m2.metric("Pts. torneo", puntos_totales_torneo_equipo)
-                        m3.metric("Ganados", f"{victorias} ({victorias/total:.0%})" if total > 0 else "0")
-                        m4.metric("Perdidos", f"{derrotas} ({derrotas/total:.0%})" if total > 0 else "0")
+                        # Grilla de métricas responsiva (2 col mobile, 4 col desktop)
+                        pb_calc = int(puntos_totales_torneo_equipo - (victorias * 4 + empates * 2)) if total > 0 else 0
+                        ganados_str = f"{victorias} ({victorias/total:.0%})" if total > 0 else "0"
+                        perdidos_str = f"{derrotas} ({derrotas/total:.0%})" if total > 0 else "0"
+                        empatados_str = f"{empates} ({empates/total:.0%})" if total > 0 else "0"
+                        prom_str = f"{prom_puntos_favor:.1f} / {prom_puntos_contra:.1f}"
+                        dif_str = f"{dif_prom_partido:+.1f}"
 
-                        m5, m6, m7, m8 = st.columns(4)
-                        m5.metric("Empatados", f"{empates} ({empates/total:.0%})" if total > 0 else "0")
-                        m6.metric("Pts. Bonus", int(puntos_totales_torneo_equipo - (victorias * 4 + empates * 2)) if total > 0 else 0)
-                        m7.metric("Prom. PF/PC", f"{prom_puntos_favor:.1f} / {prom_puntos_contra:.1f}")
-                        m8.metric("Dif. Prom.", f"{dif_prom_partido:+.1f}", delta=f"{dif_prom_partido:+.1f}")
+                        st.markdown(f"""
+                        <div class="metrics-grid">
+                            <div class="metric-card"><div class="metric-card-label">Jugados</div><div class="metric-card-value">{total}</div></div>
+                            <div class="metric-card"><div class="metric-card-label">Pts. Torneo</div><div class="metric-card-value">{int(puntos_totales_torneo_equipo)}</div></div>
+                            <div class="metric-card"><div class="metric-card-label">Ganados</div><div class="metric-card-value">{ganados_str}</div></div>
+                            <div class="metric-card"><div class="metric-card-label">Perdidos</div><div class="metric-card-value">{perdidos_str}</div></div>
+                            <div class="metric-card"><div class="metric-card-label">Empatados</div><div class="metric-card-value">{empatados_str}</div></div>
+                            <div class="metric-card"><div class="metric-card-label">Pts. Bonus</div><div class="metric-card-value">{pb_calc}</div></div>
+                            <div class="metric-card"><div class="metric-card-label">Prom. PF/PC</div><div class="metric-card-value">{prom_str}</div></div>
+                            <div class="metric-card"><div class="metric-card-label">Dif. Prom.</div><div class="metric-card-value">{dif_str}</div></div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                         with st.expander("Distribución de Resultados", expanded=False):
                             if total > 0: 
@@ -1046,10 +1089,14 @@ if ano_nac_seleccionado_str:
                         total_rojas = df_tarjetas_equipo["Incidencia"].str.contains("roja", case=False).sum()
                         total_azules = df_tarjetas_equipo["Incidencia"].str.contains("azul", case=False).sum()
 
-                        tc1, tc2, tc3 = st.columns(3)
-                        tc1.metric("Amarillas", total_amarillas)
-                        tc2.metric("Rojas", total_rojas)
-                        tc3.metric("Azules", total_azules)
+                        # Grilla de métricas para tarjetas del equipo
+                        st.markdown(f"""
+                        <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+                            <div class="metric-card"><div class="metric-card-label">Amarillas</div><div class="metric-card-value">{total_amarillas}</div></div>
+                            <div class="metric-card"><div class="metric-card-label">Rojas</div><div class="metric-card-value">{total_rojas}</div></div>
+                            <div class="metric-card"><div class="metric-card-label">Azules</div><div class="metric-card-value">{total_azules}</div></div>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                         # Mostrar tabla detallada
                         st.dataframe(
@@ -1272,10 +1319,13 @@ if ano_nac_seleccionado_str:
                     total_b = df_tarjetas[df_tarjetas["Incidencia"].str.contains("azul")].shape[0]
 
                     # --- 2. Panel de Métricas ---
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("Amarillas Totales", total_y)
-                    m2.metric("Rojas Totales", total_r)
-                    m3.metric("Azules Totales", total_b)
+                    st.markdown(f"""
+                    <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="metric-card"><div class="metric-card-label">Amarillas</div><div class="metric-card-value">{total_y}</div></div>
+                        <div class="metric-card"><div class="metric-card-label">Rojas</div><div class="metric-card-value">{total_r}</div></div>
+                        <div class="metric-card"><div class="metric-card-label">Azules</div><div class="metric-card-value">{total_b}</div></div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
                     # --- 3. Filtro por Club ---
                     clubes_con_tarjetas = sorted(df_tarjetas["Equipo"].unique())
