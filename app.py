@@ -635,31 +635,40 @@ if ano_nac_seleccionado_str:
             with tab_res:
                 st.subheader("Resultados por Fecha")
                 
-                # Intentar detectar la columna que representa la "Fecha" (ronda/instancia)
-                # Buscamos nombres comunes en planillas de rugby
-                col_ronda = None
-                for c in ["Instancia", "Nro.", "Nro", "Fecha"]:
-                    if c in df_raw_data.columns and c != "Fecha y Hora":
-                        col_ronda = c
-                        break
+                # Asegurar conversión a datetime
+                if "Fecha_dt" not in df_raw_data.columns:
+                    df_raw_data["Fecha_dt"] = pd.to_datetime(df_raw_data["Fecha y Hora"], errors="coerce", dayfirst=True)
                 
-                if col_ronda:
-                    # Obtener valores únicos y ordenarlos (asumiendo que pueden ser strings o números)
-                    opciones_ronda = sorted(df_raw_data[col_ronda].unique(), key=lambda x: str(x))
-                    
-                    # Seleccionar por defecto la última fecha que tenga resultados cerrados
-                    df_cerrados = df_raw_data[df_raw_data["Estado"].str.startswith("Cerrado", na=False)]
-                    default_idx = 0
-                    if not df_cerrados.empty:
-                        ultima_ronda_cerrada = df_cerrados[col_ronda].iloc[-1]
-                        if ultima_ronda_cerrada in opciones_ronda:
-                            default_idx = opciones_ronda.index(ultima_ronda_cerrada)
+                # Crear etiquetas para agrupar por día (ej: "Sáb 26/04")
+                dias_abrev_res = {
+                    "Monday": "Lun", "Tuesday": "Mar", "Wednesday": "Mié",
+                    "Thursday": "Jue", "Friday": "Vie", "Saturday": "Sáb", "Sunday": "Dom"
+                }
+                
+                def fmt_fecha_grupo(dt):
+                    if pd.isna(dt): return "Sin Fecha"
+                    dia = dias_abrev_res.get(dt.strftime('%A'), "")
+                    return f"{dia} {dt.strftime('%d/%m')}"
 
-                    ronda_sel = st.selectbox("Seleccioná la Fecha / Instancia:", opciones_ronda, index=default_idx)
+                df_raw_data["Fecha_Grupo"] = df_raw_data["Fecha_dt"].apply(fmt_fecha_grupo)
+                
+                # Obtener opciones únicas ordenadas cronológicamente por la fecha real
+                opciones_fecha = df_raw_data.sort_values("Fecha_dt")["Fecha_Grupo"].unique().tolist()
+                
+                if opciones_fecha:
+                    # Seleccionar por defecto la última fecha con resultados cerrados
+                    df_cerrados = df_raw_data[df_raw_data["Estado"].str.startswith("Cerrado", na=False)]
+                    default_idx = len(opciones_fecha) - 1
+                    if not df_cerrados.empty:
+                        ultima_fecha_valida = fmt_fecha_grupo(df_cerrados.sort_values("Fecha_dt")["Fecha_dt"].iloc[-1])
+                        if ultima_fecha_valida in opciones_fecha:
+                            default_idx = opciones_fecha.index(ultima_fecha_valida)
+
+                    fecha_sel = st.selectbox("Seleccioná la fecha de los partidos:", opciones_fecha, index=default_idx)
                     
-                    df_ronda = df_raw_data[df_raw_data[col_ronda] == ronda_sel].copy()
+                    df_ronda = df_raw_data[df_raw_data["Fecha_Grupo"] == fecha_sel].copy()
                     
-                    st.markdown(f"**Partidos de la {ronda_sel}**")
+                    st.markdown(f"**Partidos del {fecha_sel}**")
                     
                     for _, row in df_ronda.iterrows():
                         loc = row["Local"]
