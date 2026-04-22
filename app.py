@@ -495,14 +495,15 @@ st.markdown("""
             margin-bottom: 0.4rem;
             border-radius: 8px;
             border-left: 4px solid;
-            background: rgba(255,255,255,0.03);
+            background: var(--secondary-background-color);
         }
         .resultado-ganado { border-left-color: #2ecc71; }
         .resultado-perdido { border-left-color: #e74c3c; }
         .resultado-empate { border-left-color: #95a5a6; }
         .result-meta {
             font-size: 0.75rem;
-            color: rgba(255,255,255,0.5);
+            color: var(--text-color);
+            opacity: 0.6;
             margin-bottom: 0.2rem;
         }
         .result-teams {
@@ -518,7 +519,7 @@ st.markdown("""
             text-align: center;
         }
         .result-equipo { font-weight: 600; flex: 1; }
-        .result-rival { flex: 1; text-align: right; color: rgba(255,255,255,0.7); }
+        .result-rival { flex: 1; text-align: right; color: var(--text-color); opacity: 0.7; }
 
         @media (max-width: 480px) {
             .result-teams { font-size: 0.85rem; }
@@ -629,6 +630,65 @@ st.markdown("""
         }
     
         
+        /* 11. Clases de utilidad para reemplazar inline styles */
+        .pts-bonus {
+            opacity: 0.6;
+            font-size: 0.8rem;
+        }
+        .vs-text {
+            flex: 1;
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+        .match-score-pending {
+            color: var(--text-color);
+            opacity: 0.3;
+        }
+        .match-separator {
+            color: var(--text-color);
+            opacity: 0.25;
+            margin: 0 4px;
+        }
+        .result-equipo-left {
+            text-align: left;
+            flex: 2;
+        }
+        .result-equipo-ellipsis {
+            text-align: left;
+            flex: 2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .result-rival-right {
+            text-align: right;
+            flex: 2;
+        }
+        .result-rival-ellipsis {
+            text-align: right;
+            flex: 2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .result-score-flex {
+            flex: 1;
+        }
+        .result-card-pending {
+            background: var(--secondary-background-color) !important;
+            border-left: 4px solid var(--text-color) !important;
+            opacity: 0.6;
+        }
+        .result-card-na {
+            margin-bottom: 0.5rem;
+            padding: 0.6rem 1rem;
+            background: var(--secondary-background-color) !important;
+            border-left: 4px solid #f1c40f !important;
+        }
+        .grid-3-cols {
+            grid-template-columns: repeat(3, 1fr) !important;
+        }
+
         /* --- CORRECCIÓN MODO CLARO TOTAL --- */
         @media (prefers-color-scheme: light) {
             .stApp {
@@ -639,7 +699,7 @@ st.markdown("""
             div[role="radiogroup"] label {
                 border: 1px solid rgba(0,0,0,0.15) !important;
                 background: #ffffff !important;
-                color: #31333F !important;
+                color: #1a1c21 !important;
                 opacity: 1 !important;
             }
             div[role="radiogroup"] label:hover {
@@ -648,11 +708,12 @@ st.markdown("""
             
             /* 2. Pestañas (Tabs) - Forzar visibilidad */
             button[data-baseweb="tab"] {
-                color: rgba(0,0,0,0.6) !important;
-                opacity: 1 !important;
+                color: #1a1c21 !important;
+                opacity: 0.8 !important;
             }
             button[data-baseweb="tab"]:hover {
                 color: #000000 !important;
+                opacity: 1 !important;
             }
             button[data-baseweb="tab"][aria-selected="true"] {
                 color: #ff4b4b !important;
@@ -660,31 +721,27 @@ st.markdown("""
             }
 
             /* 3. Tarjetas de Partido y Resultados */
-            .match-card, .result-card, .metric-card, .na-card, div[data-testid="stTabs"] {
+            .match-card, .result-card, .metric-card, .na-card, .result-card-na, div[data-testid="stTabs"] {
                 background: #ffffff !important;
-                border: 1px solid rgba(0,0,0,0.1) !important;
-                color: #31333F !important;
+                border: 1px solid rgba(0,0,0,0.15) !important;
+                color: #1a1c21 !important;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
             }
             
             /* 4. Textos Secundarios (FECHAS, RIVALES, META) */
-            .match-date, .result-meta, .metric-card-label, .match-footer, .result-rival {
+            .match-date, .result-meta, .metric-card-label, .match-footer, .result-rival, .match-separator {
                 color: #5f6368 !important;
                 opacity: 1 !important;
             }
             
-            /* Rival en tarjetas de resultados */
-            .result-rival {
-                color: #5f6368 !important;
-            }
-            
             /* Títulos y Puntos */
-            .team-name, .result-score, .metric-card-value, .result-equipo, .match-score:not(.score-favorito):not(.score-empate):not(.score-perdedor) {
+            .team-name, .result-score, .metric-card-value, .result-equipo, .match-score:not(.score-favorito):not(.score-empate):not(.score-perdedor), .vs-text, .match-score-pending {
                 color: #1a1c21 !important;
+                opacity: 1 !important;
             }
             
             /* Puntos entre paréntesis (puntos bonus) */
-            span[style*="opacity: 0.6"] {
+            .pts-bonus {
                 color: #5f6368 !important;
                 opacity: 1 !important;
             }
@@ -692,15 +749,16 @@ st.markdown("""
             /* 5. Expanders */
             div[data-testid="stExpander"] {
                 background: #ffffff !important;
-                border: 1px solid rgba(0,0,0,0.1) !important;
+                border: 1px solid rgba(0,0,0,0.15) !important;
             }
             div[data-testid="stExpander"] summary {
-                color: #31333F !important;
+                color: #1a1c21 !important;
             }
             
             /* 6. Fix para los "Corchetes" (bordes laterales) */
             .result-card {
                 border-left-width: 6px !important;
+                border-left-style: solid !important;
             }
         }
     </style>
@@ -883,8 +941,8 @@ if ano_nac_seleccionado_str:
                             meta_disp = "Finalizado"
                             
                             # Formatear nombres con puntos y negrita si ganó
-                            loc_html = f"<b>{loc}</b> <span style='opacity: 0.6; font-size: 0.8rem;'>({ptL_val})</span>" if ganador_l else f"{loc} <span style='opacity: 0.6; font-size: 0.8rem;'>({ptL_val})</span>"
-                            vis_html = f"<b>{vis}</b> <span style='opacity: 0.6; font-size: 0.8rem;'>({ptV_val})</span>" if ganador_v else f"{vis} <span style='opacity: 0.6; font-size: 0.8rem;'>({ptV_val})</span>"
+                            loc_html = f"<b>{loc}</b> <span class='pts-bonus'>({ptL_val})</span>" if ganador_l else f"{loc} <span class='pts-bonus'>({ptL_val})</span>"
+                            vis_html = f"<b>{vis}</b> <span class='pts-bonus'>({ptV_val})</span>" if ganador_v else f"{vis} <span class='pts-bonus'>({ptV_val})</span>"
                         else:
                             # Partido Pendiente
                             res_class = "na-card"
@@ -894,12 +952,12 @@ if ano_nac_seleccionado_str:
                             vis_html = vis
                         
                         st.markdown(f"""
-                        <div class="result-card {res_class if est.startswith('Cerrado') else ''}" style="{'background: rgba(255,255,255,0.02); border-left: 4px solid rgba(255,255,255,0.1);' if not est.startswith('Cerrado') else ''}">
+                        <div class="result-card {res_class if est.startswith('Cerrado') else 'result-card-pending'}">
                             <div class="result-meta">{meta_disp}</div>
                             <div class="result-teams">
-                                <span class="result-equipo" style="text-align: left; flex: 2;">{loc_html}</span>
-                                <span class="result-score" style="flex: 1;">{score_disp}</span>
-                                <span class="result-rival" style="text-align: right; flex: 2;">{vis_html}</span>
+                                <span class="result-equipo result-equipo-left">{loc_html}</span>
+                                <span class="result-score result-score-flex">{score_disp}</span>
+                                <span class="result-rival result-rival-right">{vis_html}</span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1196,12 +1254,12 @@ if ano_nac_seleccionado_str:
                         <div class="result-card {resultado_class}">
                             <div class="result-meta">{fecha_str} · {condicion}</div>
                             <div class="result-teams">
-                                <span class="result-equipo" style="text-align: left; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                    {equipo_html} <span style="opacity: 0.6; font-size: 0.8rem;">({int(pts_e)})</span>
+                                <span class="result-equipo result-equipo-ellipsis">
+                                    {equipo_html} <span class="pts-bonus">({int(pts_e)})</span>
                                 </span>
-                                <span class="result-score" style="flex: 1;">{int(pf)} - {int(pc)}</span>
-                                <span class="result-rival" style="text-align: right; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                    <span style="opacity: 0.6; font-size: 0.8rem;">({int(pts_r)})</span> {rival_html}
+                                <span class="result-score result-score-flex">{int(pf)} - {int(pc)}</span>
+                                <span class="result-rival result-rival-ellipsis">
+                                    <span class="pts-bonus">({int(pts_r)})</span> {rival_html}
                                 </span>
                             </div>
                         </div>
@@ -1235,12 +1293,12 @@ if ano_nac_seleccionado_str:
                         for _, row in pendientes_equipo.iterrows():
                             # Reutilizamos el estilo de na-card para pendientes
                             st.markdown(f"""
-                            <div class="result-card na-card" style="margin-bottom: 0.5rem; padding: 0.6rem 1rem; background: rgba(30,30,50,0.4); border-left: 4px solid #f1c40f;">
+                            <div class="result-card na-card result-card-na">
                                 <div class="result-meta">{row['Fecha']} · {row['Condición']}</div>
                                 <div class="result-teams">
-                                    <span class="result-equipo" style="text-align: left; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{equipo_seleccionado}</span>
-                                    <span class="result-score" style="flex: 1; font-size: 0.9rem; opacity: 0.7;">vs</span>
-                                    <span class="result-rival" style="text-align: right; flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{row['Rival']}</span>
+                                    <span class="result-equipo result-equipo-ellipsis">{equipo_seleccionado}</span>
+                                    <span class="result-score vs-text">vs</span>
+                                    <span class="result-rival result-rival-ellipsis">{row['Rival']}</span>
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
@@ -1263,7 +1321,7 @@ if ano_nac_seleccionado_str:
 
                         # Grilla de métricas para tarjetas del equipo
                         st.markdown(f"""
-                        <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="metrics-grid grid-3-cols">
                             <div class="metric-card"><div class="metric-card-label">Amarillas</div><div class="metric-card-value">{total_amarillas}</div></div>
                             <div class="metric-card"><div class="metric-card-label">Rojas</div><div class="metric-card-value">{total_rojas}</div></div>
                             <div class="metric-card"><div class="metric-card-label">Azules</div><div class="metric-card-value">{total_azules}</div></div>
@@ -1386,7 +1444,7 @@ if ano_nac_seleccionado_str:
                                         <div class="match-date">{fecha_str}</div>
                                         <div class="match-teams">
                                             <span class="team-name team-local">{local_eq}</span>
-                                            <span class="match-score" style="color: rgba(255,255,255,0.3);">? — ?</span>
+                                            <span class="match-score match-score-pending">? — ?</span>
                                             <span class="team-name team-visitante">{visitante_eq}</span>
                                         </div>
                                         <div class="match-footer">
@@ -1439,7 +1497,7 @@ if ano_nac_seleccionado_str:
                                         <span class="team-name team-local">{local_eq}</span>
                                         <span class="match-score">
                                             <span class="{score_l_class}">{pred_l}</span>
-                                            <span style="color: rgba(255,255,255,0.25); margin: 0 4px;">—</span>
+                                            <span class="match-separator">—</span>
                                             <span class="{score_v_class}">{pred_v}</span>
                                         </span>
                                         <span class="team-name team-visitante">{visitante_eq}</span>
@@ -1492,7 +1550,7 @@ if ano_nac_seleccionado_str:
 
                     # --- 2. Panel de Métricas ---
                     st.markdown(f"""
-                    <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="metrics-grid grid-3-cols">
                         <div class="metric-card"><div class="metric-card-label">Amarillas</div><div class="metric-card-value">{total_y}</div></div>
                         <div class="metric-card"><div class="metric-card-label">Rojas</div><div class="metric-card-value">{total_r}</div></div>
                         <div class="metric-card"><div class="metric-card-label">Azules</div><div class="metric-card-value">{total_b}</div></div>
