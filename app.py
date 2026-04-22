@@ -627,6 +627,57 @@ st.markdown("""
             font-weight: 700;
             color: #ffffff;
         }
+    
+        /* --- CORRECCIÓN MODO CLARO (SIN TOCAR EL OSCURO) --- */
+        @media (prefers-color-scheme: light) {
+            .stApp {
+                background-color: #f8f9fa !important;
+            }
+            /* Pills y Selectores */
+            div[role="radiogroup"] label {
+                border-color: rgba(0,0,0,0.2) !important;
+                background: #ffffff !important;
+                color: #1f2937 !important;
+            }
+            div[role="radiogroup"] label:hover {
+                background: #f3f4f6 !important;
+            }
+            /* Tarjetas y Contenedores */
+            .match-card, .result-card, .metric-card, .na-card, div[data-testid="stTabs"] {
+                background: #ffffff !important;
+                border-color: rgba(0,0,0,0.12) !important;
+                color: #1f2937 !important;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.05) !important;
+            }
+            /* Textos secundarios */
+            .match-date, .result-meta, .metric-card-label, .match-footer {
+                color: #6b7280 !important;
+            }
+            /* Títulos y Valores */
+            .team-name, .result-score, .metric-card-value, .match-score:not(.score-favorito):not(.score-empate):not(.score-perdedor) {
+                color: #111827 !important;
+            }
+            /* Tabs */
+            button[data-baseweb="tab"] {
+                color: #4b5563 !important;
+            }
+            button[data-baseweb="tab"]:hover {
+                color: #111827 !important;
+                background: #f9fafb !important;
+            }
+            button[data-baseweb="tab"][aria-selected="true"] {
+                color: #ff4b4b !important;
+                background: rgba(255,75,75,0.05) !important;
+            }
+            /* Expanders */
+            div[data-testid="stExpander"] {
+                background: #ffffff !important;
+                border-color: rgba(0,0,0,0.1) !important;
+            }
+            div[data-testid="stExpander"] summary {
+                color: #1f2937 !important;
+            }
+        }
     </style>
 """, unsafe_allow_html=True)
 
