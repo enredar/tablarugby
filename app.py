@@ -295,8 +295,9 @@ st.markdown("""
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
 
         /* Global Font Normalization */
-        html, body, [class*="css"], [class*="st-"], p, span, div, h1, h2, h3, h4, h5, h6 {
-            font-family: 'Outfit', sans-serif !important;
+        /* Eliminamos selectores globales destructivos (*) para no romper los iconos de Streamlit */
+        .stApp, p, h1, h2, h3, h4, h5, h6, .stMarkdown, .stText, li {
+            font-family: 'Outfit', sans-serif;
         }
 
         /* Streamlit padding — enough to clear the top bar */
@@ -344,12 +345,12 @@ st.markdown("""
             font-size: 0.82rem;
             cursor: pointer;
             border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.15) !important;
-            background: rgba(255,255,255,0.05) !important;
+            border: 1px solid var(--secondary-background-color) !important;
+            background: var(--secondary-background-color) !important;
             transition: all 0.15s ease;
         }
         div[role="radiogroup"] label:hover {
-            background: rgba(255,255,255,0.12) !important;
+            background: var(--background-color) !important;
         }
         /* Hide the radio circle */
         div[role="radiogroup"] label > div:first-child {
@@ -410,8 +411,8 @@ st.markdown("""
 
         /* 7. Match Cards (La bola de cristal) */
         .match-card {
-            background: linear-gradient(135deg, rgba(30,30,50,0.6) 0%, rgba(40,40,70,0.4) 100%);
-            border: 1px solid rgba(255,255,255,0.08);
+            background: var(--secondary-background-color);
+            border: 1px solid var(--secondary-background-color);
             border-radius: 12px;
             padding: 1.2rem 1.5rem;
             margin-bottom: 1rem;
@@ -419,7 +420,8 @@ st.markdown("""
         }
         .match-date {
             font-size: 0.8rem;
-            color: rgba(255,255,255,0.5);
+            color: var(--text-color);
+            opacity: 0.6;
             margin-bottom: 0.5rem;
         }
         .match-teams {
@@ -443,12 +445,12 @@ st.markdown("""
             letter-spacing: 2px;
         }
         .score-favorito { color: #2ecc71; }
-        .score-perdedor { color: rgba(255,255,255,0.5); }
+        .score-perdedor { color: var(--text-color); opacity: 0.5; }
         .score-empate { color: #f39c12; }
         .match-bar-container {
             width: 100%;
             height: 6px;
-            background: rgba(255,255,255,0.08);
+            background: var(--background-color);
             border-radius: 3px;
             overflow: hidden;
             margin-bottom: 0.5rem;
@@ -463,7 +465,8 @@ st.markdown("""
             justify-content: space-between;
             align-items: center;
             font-size: 0.78rem;
-            color: rgba(255,255,255,0.45);
+            color: var(--text-color);
+            opacity: 0.6;
         }
         .conf-badge {
             padding: 2px 10px;
@@ -501,12 +504,16 @@ st.markdown("""
             padding: 0.6rem 1rem;
             margin-bottom: 0.4rem;
             border-radius: 8px;
-            border-left: 4px solid;
+            border-left: 6px solid !important;
+            border-top: 1px solid var(--secondary-background-color) !important;
+            border-right: 1px solid var(--secondary-background-color) !important;
+            border-bottom: 1px solid var(--secondary-background-color) !important;
             background: var(--secondary-background-color);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
-        .resultado-ganado { border-left-color: #2ecc71; }
-        .resultado-perdido { border-left-color: #e74c3c; }
-        .resultado-empate { border-left-color: #95a5a6; }
+        .resultado-ganado { border-left-color: #2ecc71 !important; }
+        .resultado-perdido { border-left-color: #e74c3c !important; }
+        .resultado-empate { border-left-color: #95a5a6 !important; }
         .result-meta {
             font-size: 0.75rem;
             color: var(--text-color);
@@ -535,12 +542,12 @@ st.markdown("""
 
         /* Streamlit Tabs — prominent navigation bar */
         div[data-testid="stTabs"] {
-            background: rgba(255,255,255,0.03);
+            background: var(--secondary-background-color);
             border-radius: 12px;
             padding: 4px;
             margin: 0.5rem 0 1.5rem 0;
-            border: 1px solid rgba(255,255,255,0.08);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            border: 1px solid var(--secondary-background-color);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
         div[data-testid="stTabs"] [data-baseweb="tab-list"] {
             gap: 2px;
@@ -551,7 +558,8 @@ st.markdown("""
             margin: 0 !important;
             border: none !important;
             transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            color: rgba(255,255,255,0.5) !important;
+            color: var(--text-color) !important;
+            opacity: 0.7 !important;
             flex: 1; 
             min-width: 90px;
             height: 40px;
@@ -561,13 +569,14 @@ st.markdown("""
             color: inherit !important;
         }
         button[data-baseweb="tab"]:hover {
-            color: #ffffff !important;
-            background-color: rgba(255,255,255,0.05) !important;
+            opacity: 1 !important;
+            background-color: var(--secondary-background-color) !important;
         }
         button[data-baseweb="tab"][aria-selected="true"] {
             background-color: rgba(255, 75, 75, 0.15) !important;
             color: #ff4b4b !important;
             font-weight: 700 !important;
+            opacity: 1 !important;
         }
         /* Hide the default underline */
         div[data-baseweb="tab-highlight"] {
@@ -576,14 +585,14 @@ st.markdown("""
 
         /* Snapier Expanders */
         div[data-testid="stExpander"] {
-            border: 1px solid rgba(255,255,255,0.08) !important;
-            background: rgba(255,255,255,0.02) !important;
+            border: 1px solid var(--secondary-background-color) !important;
+            background: var(--secondary-background-color) !important;
             border-radius: 10px !important;
             transition: all 0.15s ease !important;
         }
         div[data-testid="stExpander"] > details > summary {
             padding: 0.5rem 1rem !important;
-            color: rgba(255,255,255,0.8) !important;
+            color: var(--text-color) !important;
         }
         div[data-testid="stExpander"] > details > summary:hover {
             color: #ff4b4b !important;
@@ -597,12 +606,13 @@ st.markdown("""
         }
 
         .na-card {
-            background: rgba(30,30,50,0.3);
-            border: 1px dashed rgba(255,255,255,0.1);
+            background: var(--secondary-background-color);
+            border: 1px dashed var(--text-color);
+            opacity: 0.6;
             border-radius: 12px;
             padding: 1rem 1.5rem;
             margin-bottom: 1rem;
-            color: rgba(255,255,255,0.4);
+            color: var(--text-color);
         }
 
         /* Metrics Grid */
@@ -618,15 +628,16 @@ st.markdown("""
             }
         }
         .metric-card {
-            background: rgba(255,255,255,0.04);
-            border: 1px solid rgba(255,255,255,0.08);
+            background: var(--secondary-background-color);
+            border: 1px solid var(--secondary-background-color);
             border-radius: 10px;
             padding: 0.7rem 0.4rem;
             text-align: center;
         }
         .metric-card-label {
             font-size: 0.7rem;
-            color: rgba(255,255,255,0.5);
+            color: var(--text-color);
+            opacity: 0.6;
             margin-bottom: 0.2rem;
             text-transform: uppercase;
             white-space: nowrap;
@@ -636,7 +647,7 @@ st.markdown("""
         .metric-card-value {
             font-size: 1.1rem;
             font-weight: 700;
-            color: #ffffff;
+            color: var(--text-color);
         }
     
         
@@ -686,90 +697,17 @@ st.markdown("""
         }
         .result-card-pending {
             background: var(--secondary-background-color) !important;
-            border-left: 4px solid var(--text-color) !important;
+            border-left-color: var(--text-color) !important;
             opacity: 0.6;
         }
         .result-card-na {
             margin-bottom: 0.5rem;
             padding: 0.6rem 1rem;
             background: var(--secondary-background-color) !important;
-            border-left: 4px solid #f1c40f !important;
+            border-left-color: #f1c40f !important;
         }
         .grid-3-cols {
             grid-template-columns: repeat(3, 1fr) !important;
-        }
-
-        /* --- CORRECCIÓN MODO CLARO TOTAL --- */
-        @media (prefers-color-scheme: light) {
-            .stApp {
-                background-color: #f8f9fa !important;
-            }
-            
-            /* 1. Pills (Categorías) - Forzar visibilidad */
-            div[role="radiogroup"] label {
-                border: 1px solid rgba(0,0,0,0.15) !important;
-                background: #ffffff !important;
-                color: #1a1c21 !important;
-                opacity: 1 !important;
-            }
-            div[role="radiogroup"] label:hover {
-                background: #f1f3f5 !important;
-            }
-            
-            /* 2. Pestañas (Tabs) - Forzar visibilidad */
-            button[data-baseweb="tab"] {
-                color: #1a1c21 !important;
-                opacity: 0.8 !important;
-            }
-            button[data-baseweb="tab"]:hover {
-                color: #000000 !important;
-                opacity: 1 !important;
-            }
-            button[data-baseweb="tab"][aria-selected="true"] {
-                color: #ff4b4b !important;
-                background: rgba(255,75,75,0.08) !important;
-            }
-
-            /* 3. Tarjetas de Partido y Resultados */
-            .match-card, .result-card, .metric-card, .na-card, .result-card-na, div[data-testid="stTabs"] {
-                background: #ffffff !important;
-                border: 1px solid rgba(0,0,0,0.15) !important;
-                color: #1a1c21 !important;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
-            }
-            
-            /* 4. Textos Secundarios (FECHAS, RIVALES, META) */
-            .match-date, .result-meta, .metric-card-label, .match-footer, .result-rival, .match-separator {
-                color: #5f6368 !important;
-                opacity: 1 !important;
-            }
-            
-            /* Títulos y Puntos */
-            .team-name, .result-score, .metric-card-value, .result-equipo, .match-score:not(.score-favorito):not(.score-empate):not(.score-perdedor), .vs-text, .match-score-pending {
-                color: #1a1c21 !important;
-                opacity: 1 !important;
-            }
-            
-            /* Puntos entre paréntesis (puntos bonus) */
-            .pts-bonus {
-                color: #5f6368 !important;
-                opacity: 1 !important;
-            }
-
-            /* 5. Expanders */
-            div[data-testid="stExpander"] {
-                background: #ffffff !important;
-                border: 1px solid rgba(0,0,0,0.15) !important;
-            }
-            div[data-testid="stExpander"] summary {
-                color: #1a1c21 !important;
-            }
-            
-            /* 6. Fix para los "Corchetes" (bordes laterales) */
-            .result-card {
-                border-left-width: 6px !important;
-                border-left-style: solid !important;
-            }
         }
     </style>
 """, unsafe_allow_html=True)
