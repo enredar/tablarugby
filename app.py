@@ -7,6 +7,26 @@ import plotly.express as px
 import re
 from google_sheets_client import get_gspread_client, get_division_data, get_available_birth_years, get_tarjetas_data
 
+@st.cache_data(show_spinner=False)
+def generar_imagen_tabla(df, es_posiciones=False):
+    import dataframe_image as dfi
+    import io
+    
+    if es_posiciones:
+        def color_clasificacion_img(row):
+            if row.name < 4:  
+                return ['background-color: #2ecc71'] * len(row)
+            elif row.name < 6:  
+                return ['background-color: #f1c40f'] * len(row)
+            return [''] * len(row)
+        obj_to_export = df.style.apply(color_clasificacion_img, axis=1)
+    else:
+        obj_to_export = df
+        
+    buf = io.BytesIO()
+    dfi.export(obj_to_export, buf, table_conversion='matplotlib')
+    return buf.getvalue()
+
 # ---------- Funciones auxiliares ----------
 
 def parse_resultado(resultado):
@@ -818,6 +838,18 @@ if ano_nac_seleccionado_str:
                 filas = len(tabla_posiciones)
                 altura = int(filas * 35 + 40)
 
+                # Botón de descarga de imagen
+                col_izq, col_der = st.columns([8, 2])
+                with col_der:
+                    img_bytes = generar_imagen_tabla(tabla_posiciones, es_posiciones=True)
+                    st.download_button(
+                        label="📸 Descargar",
+                        data=img_bytes,
+                        file_name=f"posiciones_{ano_nac_seleccionado_str}.png",
+                        mime="image/png",
+                        use_container_width=True
+                    )
+
                 st.dataframe(tabla_estilizada, hide_index=True, use_container_width=True, height=altura)
 
             # --- RESULTADOS POR FECHA ---
@@ -979,6 +1011,18 @@ if ano_nac_seleccionado_str:
                 # Calcular altura dinámica
                 filas = len(df_mostrar)
                 altura = min(int(filas * 35 + 40), 800) if filas > 0 else 100
+
+                if not df_mostrar.empty:
+                    col_izq, col_der = st.columns([8, 2])
+                    with col_der:
+                        img_bytes = generar_imagen_tabla(df_mostrar[columnas_mostrar], es_posiciones=False)
+                        st.download_button(
+                            label="📸 Descargar",
+                            data=img_bytes,
+                            file_name=f"pendientes_{ano_nac_seleccionado_str}.png",
+                            mime="image/png",
+                            use_container_width=True
+                        )
 
                 st.dataframe(
                     df_mostrar[columnas_mostrar],

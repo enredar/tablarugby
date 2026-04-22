@@ -7,3 +7,4 @@ plotly>=5.24.1
 gspread>=5.12.4
 gspread-pandas>=3.3.0
 google-auth>=2.40.2
+dataframe_image>=0.2.2
