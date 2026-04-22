@@ -21,7 +21,13 @@ def generar_imagen_tabla(df, es_posiciones=False):
             return [''] * len(row)
         obj_to_export = df.style.apply(color_clasificacion_img, axis=1)
     else:
-        obj_to_export = df
+        obj_to_export = df.style
+
+    # Ocultar la columna de índice para que no salga en la foto
+    try:
+        obj_to_export = obj_to_export.hide(axis='index')
+    except AttributeError:
+        obj_to_export = obj_to_export.hide_index()
         
     buf = io.BytesIO()
     dfi.export(obj_to_export, buf, table_conversion='matplotlib')
