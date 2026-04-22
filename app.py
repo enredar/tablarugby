@@ -629,10 +629,16 @@ st.markdown("""
         }
         .metric-card {
             background: var(--secondary-background-color);
-            border: 1px solid var(--secondary-background-color);
-            border-radius: 10px;
-            padding: 0.7rem 0.4rem;
+            border: 1px solid rgba(128, 128, 128, 0.15);
+            border-radius: 12px;
+            padding: 1rem 0.5rem;
             text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.1);
         }
         .metric-card-label {
             font-size: 0.7rem;
