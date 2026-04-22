@@ -628,54 +628,79 @@ st.markdown("""
             color: #ffffff;
         }
     
-        /* --- CORRECCIÓN MODO CLARO (SIN TOCAR EL OSCURO) --- */
+        
+        /* --- CORRECCIÓN MODO CLARO TOTAL --- */
         @media (prefers-color-scheme: light) {
             .stApp {
                 background-color: #f8f9fa !important;
             }
-            /* Pills y Selectores */
+            
+            /* 1. Pills (Categorías) - Forzar visibilidad */
             div[role="radiogroup"] label {
-                border-color: rgba(0,0,0,0.2) !important;
+                border: 1px solid rgba(0,0,0,0.15) !important;
                 background: #ffffff !important;
-                color: #1f2937 !important;
+                color: #31333F !important;
+                opacity: 1 !important;
             }
             div[role="radiogroup"] label:hover {
-                background: #f3f4f6 !important;
+                background: #f1f3f5 !important;
             }
-            /* Tarjetas y Contenedores */
-            .match-card, .result-card, .metric-card, .na-card, div[data-testid="stTabs"] {
-                background: #ffffff !important;
-                border-color: rgba(0,0,0,0.12) !important;
-                color: #1f2937 !important;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.05) !important;
-            }
-            /* Textos secundarios */
-            .match-date, .result-meta, .metric-card-label, .match-footer {
-                color: #6b7280 !important;
-            }
-            /* Títulos y Valores */
-            .team-name, .result-score, .metric-card-value, .match-score:not(.score-favorito):not(.score-empate):not(.score-perdedor) {
-                color: #111827 !important;
-            }
-            /* Tabs */
+            
+            /* 2. Pestañas (Tabs) - Forzar visibilidad */
             button[data-baseweb="tab"] {
-                color: #4b5563 !important;
+                color: rgba(0,0,0,0.6) !important;
+                opacity: 1 !important;
             }
             button[data-baseweb="tab"]:hover {
-                color: #111827 !important;
-                background: #f9fafb !important;
+                color: #000000 !important;
             }
             button[data-baseweb="tab"][aria-selected="true"] {
                 color: #ff4b4b !important;
-                background: rgba(255,75,75,0.05) !important;
+                background: rgba(255,75,75,0.08) !important;
             }
-            /* Expanders */
+
+            /* 3. Tarjetas de Partido y Resultados */
+            .match-card, .result-card, .metric-card, .na-card, div[data-testid="stTabs"] {
+                background: #ffffff !important;
+                border: 1px solid rgba(0,0,0,0.1) !important;
+                color: #31333F !important;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+            }
+            
+            /* 4. Textos Secundarios (FECHAS, RIVALES, META) */
+            .match-date, .result-meta, .metric-card-label, .match-footer, .result-rival {
+                color: #5f6368 !important;
+                opacity: 1 !important;
+            }
+            
+            /* Rival en tarjetas de resultados */
+            .result-rival {
+                color: #5f6368 !important;
+            }
+            
+            /* Títulos y Puntos */
+            .team-name, .result-score, .metric-card-value, .result-equipo, .match-score:not(.score-favorito):not(.score-empate):not(.score-perdedor) {
+                color: #1a1c21 !important;
+            }
+            
+            /* Puntos entre paréntesis (puntos bonus) */
+            span[style*="opacity: 0.6"] {
+                color: #5f6368 !important;
+                opacity: 1 !important;
+            }
+
+            /* 5. Expanders */
             div[data-testid="stExpander"] {
                 background: #ffffff !important;
-                border-color: rgba(0,0,0,0.1) !important;
+                border: 1px solid rgba(0,0,0,0.1) !important;
             }
             div[data-testid="stExpander"] summary {
-                color: #1f2937 !important;
+                color: #31333F !important;
+            }
+            
+            /* 6. Fix para los "Corchetes" (bordes laterales) */
+            .result-card {
+                border-left-width: 6px !important;
             }
         }
     </style>
