@@ -292,6 +292,13 @@ st.set_page_config(page_title="Rugby Juveniles", layout="wide")
 # Unified CSS for premium mobile-first experience
 st.markdown("""
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap');
+
+        /* Global Font Normalization */
+        html, body, [class*="css"], [class*="st-"], p, span, div, h1, h2, h3, h4, h5, h6 {
+            font-family: 'Outfit', sans-serif !important;
+        }
+
         /* Streamlit padding — enough to clear the top bar */
         .block-container {
             padding-top: 2.5rem !important;
@@ -549,6 +556,9 @@ st.markdown("""
             min-width: 90px;
             height: 40px;
             background-color: transparent !important;
+        }
+        button[data-baseweb="tab"] p, button[data-baseweb="tab"] div {
+            color: inherit !important;
         }
         button[data-baseweb="tab"]:hover {
             color: #ffffff !important;
