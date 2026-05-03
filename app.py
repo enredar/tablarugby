@@ -738,6 +738,21 @@ st.markdown("""
             background: var(--secondary-background-color) !important;
             border-left-color: #f1c40f !important;
         }
+        .result-card-iniciado {
+            background: var(--secondary-background-color) !important;
+            border-left-color: #3498db !important;
+        }
+        .estado-badge {
+            display: inline-block;
+            padding: 1px 8px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        .badge-en-curso {
+            background: rgba(52, 152, 219, 0.15);
+            color: #3498db;
+        }
         .grid-3-cols {
             grid-template-columns: repeat(3, 1fr) !important;
         }
@@ -935,16 +950,28 @@ if ano_nac_seleccionado_str:
                             # Formatear nombres con puntos y negrita si ganó
                             loc_html = f"<b>{loc}</b> <span class='pts-bonus'>({ptL_val})</span>" if ganador_l else f"{loc} <span class='pts-bonus'>({ptL_val})</span>"
                             vis_html = f"<b>{vis}</b> <span class='pts-bonus'>({ptV_val})</span>" if ganador_v else f"{vis} <span class='pts-bonus'>({ptV_val})</span>"
+                        elif not est.startswith("Pendiente"):
+                            # Partido Iniciado / En Curso (resultado provisorio)
+                            pfL_i, _ = parse_resultado(resL)
+                            pfV_i, _ = parse_resultado(resV)
+                            if pfL_i is not None and pfV_i is not None:
+                                score_disp = f"{int(pfL_i)} - {int(pfV_i)}"
+                            else:
+                                score_disp = "vs"
+                            res_class = "result-card-iniciado"
+                            meta_disp = '<span class="estado-badge badge-en-curso">En Curso</span>'
+                            loc_html = loc
+                            vis_html = vis
                         else:
                             # Partido Pendiente
-                            res_class = "na-card"
+                            res_class = "result-card-pending"
                             score_disp = "vs"
                             meta_disp = fecha_h
                             loc_html = loc
                             vis_html = vis
                         
                         st.markdown(f"""
-                        <div class="result-card {res_class if est.startswith('Cerrado') else 'result-card-pending'}">
+                        <div class="result-card {res_class}">
                             <div class="result-meta">{meta_disp}</div>
                             <div class="result-teams">
                                 <span class="result-equipo result-equipo-left">{loc_html}</span>
@@ -956,11 +983,11 @@ if ano_nac_seleccionado_str:
                 else:
                     st.info("No se encontró una columna de 'Instancia' o 'Nro.' para agrupar los partidos por fecha.")
 
-            # --- PARTIDOS PENDIENTES ---
+            # --- PARTIDOS PENDIENTES Y EN CURSO ---
             with tab2:
                 st.subheader("Partidos pendientes")
 
-                df_pendientes = df_raw_data[df_raw_data["Estado"] == "Pendiente"].copy()
+                df_pendientes = df_raw_data[~df_raw_data["Estado"].str.startswith("Cerrado", na=True)].copy()
                 df_pendientes["Fecha_dt"] = pd.to_datetime(df_pendientes["Fecha y Hora"], errors="coerce", dayfirst=True)
                 # Días abreviados para compactar tabla en mobile
                 dias_abrev = {
@@ -992,10 +1019,14 @@ if ano_nac_seleccionado_str:
                 ].sort_values("Fecha_dt").copy()
 
                 # 2. Panel de Métricas Rápidas (KPIs)
-                col_metric_1, col_metric_2 = st.columns(2)
+                n_en_curso = df_filtrado[~df_filtrado["Estado"].str.startswith("Pendiente", na=True)].shape[0]
+                n_pendientes_puros = len(df_filtrado) - n_en_curso
+                col_metric_1, col_metric_2, col_metric_3 = st.columns(3)
                 with col_metric_1:
-                    st.metric("Partidos Pendientes Totales", len(df_filtrado))
+                    st.metric("Pendientes", n_pendientes_puros)
                 with col_metric_2:
+                    st.metric("En Curso", n_en_curso)
+                with col_metric_3:
                     if not df_filtrado.empty and not df_filtrado["Fecha_dt"].dropna().empty:
                         prox_fecha = df_filtrado["Fecha_dt"].dropna().min()
                         prox_partido_str = prox_fecha.strftime('%d/%m/%Y %H:%M')
@@ -1005,13 +1036,17 @@ if ano_nac_seleccionado_str:
 
                 # 3. Mejoras Visuales en el DataFrame
                 if not df_filtrado.empty:
+                    # Agregar columna de estado legible
+                    df_filtrado["Est."] = df_filtrado["Estado"].apply(
+                        lambda x: "En Curso" if not str(x).startswith("Pendiente") else "Pendiente"
+                    )
                     df_mostrar = df_filtrado.rename(columns={
                         "Local": "🏠 Local", 
                         "Visitante": "✈️ Visitante"
                     })
-                    columnas_mostrar = ["Fecha", "🏠 Local", "✈️ Visitante"]
+                    columnas_mostrar = ["Fecha", "🏠 Local", "✈️ Visitante", "Est."]
                 else:
-                    df_mostrar = pd.DataFrame(columns=["Fecha", "🏠 Local", "✈️ Visitante"])
+                    df_mostrar = pd.DataFrame(columns=["Fecha", "🏠 Local", "✈️ Visitante", "Est."])
                     columnas_mostrar = df_mostrar.columns.tolist()
 
                 # Calcular altura dinámica
@@ -1292,16 +1327,33 @@ if ano_nac_seleccionado_str:
                         )
                         pendientes_equipo = pendientes_equipo.sort_values("Fecha_dt")
 
-                        st.markdown("#### Partidos pendientes")
+                        st.markdown("#### Partidos pendientes / en curso")
 
                         for _, row in pendientes_equipo.iterrows():
-                            # Reutilizamos el estilo de na-card para pendientes
+                            est_eq = str(row.get('Estado', 'Pendiente'))
+                            es_iniciado = not est_eq.startswith("Pendiente")
+                            if es_iniciado:
+                                card_class = "result-card result-card-iniciado"
+                                pfL_eq, _ = parse_resultado(row.get('ResultadoL', '-'))
+                                pfV_eq, _ = parse_resultado(row.get('ResultadoV', '-'))
+                                if pfL_eq is not None and pfV_eq is not None:
+                                    es_local_eq = row['Local'] == equipo_seleccionado
+                                    pf_display = int(pfL_eq) if es_local_eq else int(pfV_eq)
+                                    pc_display = int(pfV_eq) if es_local_eq else int(pfL_eq)
+                                    score_eq = f"{pf_display} - {pc_display}"
+                                else:
+                                    score_eq = "vs"
+                                badge_html = ' · <span class="estado-badge badge-en-curso">En Curso</span>'
+                            else:
+                                card_class = "result-card na-card result-card-na"
+                                score_eq = "vs"
+                                badge_html = ''
                             st.markdown(f"""
-                            <div class="result-card na-card result-card-na">
-                                <div class="result-meta">{row['Fecha']} · {row['Condición']}</div>
+                            <div class="{card_class}">
+                                <div class="result-meta">{row['Fecha']} · {row['Condición']}{badge_html}</div>
                                 <div class="result-teams">
                                     <span class="result-equipo result-equipo-ellipsis">{equipo_seleccionado}</span>
-                                    <span class="result-score vs-text">vs</span>
+                                    <span class="result-score vs-text">{score_eq}</span>
                                     <span class="result-rival result-rival-ellipsis">{row['Rival']}</span>
                                 </div>
                             </div>
