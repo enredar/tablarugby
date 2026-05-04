@@ -812,6 +812,11 @@ if selected != ano_nac_seleccionado_str:
     st.session_state["ano_nac_seleccionado_str"] = selected
     st.rerun()
 
+# Botón para forzar actualización de datos desde la planilla
+if st.button("🔄 Actualizar datos", use_container_width=False, key="btn_refresh_data"):
+    st.cache_data.clear()
+    st.rerun()
+
 # Reinicializar clubes_checklist si cambió la división
 if "estado_anno_anterior" not in st.session_state or st.session_state["estado_anno_anterior"] != ano_nac_seleccionado_str:
     st.session_state["clubes_checklist"] = {}
