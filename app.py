@@ -899,11 +899,11 @@ if ano_nac_seleccionado_str:
                 opciones_fecha = df_raw_data.sort_values("Fecha_dt").drop_duplicates(subset="Fecha_Grupo")["Fecha_Grupo"].tolist()
                 
                 if opciones_fecha:
-                    # Seleccionar por defecto la última fecha con resultados cerrados
-                    df_cerrados = df_raw_data[df_raw_data["Estado"].str.startswith("Cerrado", na=False)]
+                    # Seleccionar por defecto la última fecha con actividad (cerrado o iniciado)
+                    df_con_actividad = df_raw_data[~df_raw_data["Estado"].str.startswith("Pendiente", na=True)]
                     default_idx = len(opciones_fecha) - 1
-                    if not df_cerrados.empty:
-                        ultima_fecha_valida = fmt_fecha_grupo(df_cerrados.sort_values("Fecha_dt")["Fecha_dt"].iloc[-1])
+                    if not df_con_actividad.empty:
+                        ultima_fecha_valida = fmt_fecha_grupo(df_con_actividad.sort_values("Fecha_dt")["Fecha_dt"].iloc[-1])
                         if ultima_fecha_valida in opciones_fecha:
                             default_idx = opciones_fecha.index(ultima_fecha_valida)
 
