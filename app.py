@@ -895,7 +895,8 @@ if ano_nac_seleccionado_str:
                 df_raw_data["Fecha_Grupo"] = df_raw_data["Fecha_dt"].apply(fmt_fecha_grupo)
                 
                 # Obtener opciones únicas ordenadas cronológicamente por la fecha real
-                opciones_fecha = df_raw_data.sort_values("Fecha_dt")["Fecha_Grupo"].unique().tolist()
+                # Usamos drop_duplicates en vez de .unique() para preservar el orden cronológico
+                opciones_fecha = df_raw_data.sort_values("Fecha_dt").drop_duplicates(subset="Fecha_Grupo")["Fecha_Grupo"].tolist()
                 
                 if opciones_fecha:
                     # Seleccionar por defecto la última fecha con resultados cerrados
