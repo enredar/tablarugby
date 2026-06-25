@@ -16,7 +16,7 @@ def generar_imagen_tabla(df, es_posiciones=False):
         def color_clasificacion_img(row):
             if row.name < 4:  
                 return ['background-color: #2ecc71'] * len(row)
-            elif row.name < 6:  
+            elif row.name < 7:  
                 return ['background-color: #f1c40f'] * len(row)
             return [''] * len(row)
         obj_to_export = df.style.apply(color_clasificacion_img, axis=1)
@@ -850,11 +850,11 @@ if ano_nac_seleccionado_str:
                 # Tabla directa sin subheader redundante
                 tabla_posiciones = procesar_partidos(df_jugados)
 
-                # Estilizar la tabla (Top 6: verde para Top 4, amarillo para 5-6)
+                # Estilizar la tabla (verde para Top 4, amarillo para 5-7)
                 def color_clasificacion(row):
                     if row.name < 4:  # Índices 0-3: Top 4 clasificación directa
                         return ['background-color: rgba(46, 204, 113, 0.15)'] * len(row)
-                    elif row.name < 6:  # Índices 4-5: zona de repechaje
+                    elif row.name < 7:  # Índices 4-6: zona de repechaje
                         return ['background-color: rgba(241, 196, 15, 0.10)'] * len(row)
                     return [''] * len(row)
 
