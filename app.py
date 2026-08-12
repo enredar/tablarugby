@@ -5,10 +5,43 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import plotly.express as px
 import re
-from google_sheets_client import get_gspread_client, get_division_data, get_available_birth_years, get_tarjetas_data
+
+import logic
+
+# ----------------------------------------------------------------------
+# Backend de datos: Supabase (nuevo) o Google Sheets (legacy).
+# Ambas implementan la misma interfaz:
+#   get_gspread_client / get_available_years / get_default_year /
+#   get_division_data / get_tarjetas_data / get_corte_top
+# Se elige en tiempo de ejecución según qué secrets existan.
+# ----------------------------------------------------------------------
+try:
+    USE_SUPABASE = "SUPABASE_URL" in st.secrets
+except Exception:
+    USE_SUPABASE = False
+
+if USE_SUPABASE:
+    from supabase_client import (
+        get_gspread_client,
+        get_division_data,
+        get_tarjetas_data,
+        get_available_years,
+        get_default_year,
+        get_corte_top,
+    )
+    from admin import render_admin
+else:
+    from google_sheets_client import (
+        get_gspread_client,
+        get_division_data,
+        get_tarjetas_data,
+        get_available_years,
+        get_default_year,
+        get_corte_top,
+    )
 
 @st.cache_data(show_spinner=False)
-def generar_imagen_tabla(df, es_posiciones=False):
+def generar_imagen_tabla(df, es_posiciones=False, corte_top=7):
     import dataframe_image as dfi
     import io
     
@@ -16,7 +49,7 @@ def generar_imagen_tabla(df, es_posiciones=False):
         def color_clasificacion_img(row):
             if row.name < 4:  
                 return ['background-color: #2ecc71'] * len(row)
-            elif row.name < 7:  
+            elif row.name < corte_top:  
                 return ['background-color: #f1c40f'] * len(row)
             return [''] * len(row)
         obj_to_export = df.style.apply(color_clasificacion_img, axis=1)
@@ -35,31 +68,8 @@ def generar_imagen_tabla(df, es_posiciones=False):
 
 # ---------- Funciones auxiliares ----------
 
-def parse_resultado(resultado):
-    """
-    Extrae los puntos del partido y los puntos para la tabla.
-    Identifica casos "WO" o "GP" (Walkover / Gana Puntos).
-    Ej: "25 [4]" → (25, 4)
-    """
-    res_str = str(resultado).strip().upper()
-    if res_str in ["-", "", "PENDIENTE"]:
-        return None, None
-    
-    # Manejo de Walkover / Puntos cedidos
-    if "W.O." in res_str or "WO" in res_str or "GP" in res_str:
-        return 28, 5  # 28-0 y 5 puntos bonus oficial
-    if "PP" in res_str:
-        return 0, 0
-        
-    match = re.match(r"(\d+)\s*\[(\d+)\]", res_str)
-    if match:
-        return int(match.group(1)), int(match.group(2))
-    else:
-        # Fallback si solo cargaron los tantos
-        num_match = re.search(r"(\d+)", res_str)
-        if num_match:
-            return int(num_match.group(1)), 0
-        return None, None
+# parse_resultado vive en logic.py (compartido con el panel de admin)
+parse_resultado = logic.parse_resultado
 
 def procesar_partidos(df):
     posiciones = {}
@@ -759,16 +769,20 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- Panel de administración (solo en modo Supabase) ---
+if USE_SUPABASE:
+    with st.sidebar:
+        render_admin()
+
 st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
 
-# --- Conexión a Google Sheets ---
-# (get_gspread_client se cachea y solo se ejecuta una vez o cuando sea necesario)
+# --- Conexión al backend de datos ---
+# (el cliente se cachea; funciona igual para Supabase que para Sheets)
 gs_client = get_gspread_client()
 
 # --- Selección de División (Año de Nacimiento o Torneos) ---
-# Obtener dinámicamente las pestañas disponibles
-available_years_str = get_available_birth_years(gs_client)
+available_years_str = get_available_years(gs_client)
 
 # Filtrar las hojas de tarjetas (las que terminan en 'T' si su contraparte existe)
 options_for_selectbox = [y for y in available_years_str if not (y.endswith("T") and y[:-1] in available_years_str)]
@@ -784,11 +798,13 @@ def custom_sort(s):
 
 options_for_selectbox = sorted(options_for_selectbox, key=custom_sort)
 
-# Año por defecto (ej. el más reciente o uno común)
-default_year = "2010" if "2010" in options_for_selectbox else (options_for_selectbox[0] if options_for_selectbox else None)
+# División por defecto (la activa, o la más reciente), con fallback
+default_year = get_default_year(gs_client)
+if default_year not in options_for_selectbox:
+    default_year = options_for_selectbox[0] if options_for_selectbox else None
 
 if not default_year:
-    st.error("No se pudieron cargar las divisiones desde Google Sheets y no hay fallback. Verifica la configuración.")
+    st.error("No se pudieron cargar las divisiones desde el backend. Verifica la configuración.")
     st.stop()
 
 # --- Selección de División — Pill Buttons ---
@@ -826,8 +842,11 @@ if "estado_anno_anterior" not in st.session_state or st.session_state["estado_an
 if ano_nac_seleccionado_str:
     df_raw_data = get_division_data(gs_client, ano_nac_seleccionado_str)
 
+    # Corte de clasificación (cuántos equipos entran) para el coloreado de tabla
+    corte_top = int(get_corte_top(gs_client, ano_nac_seleccionado_str) or 7)
+
     if df_raw_data.empty and ano_nac_seleccionado_str in available_years_str:
-        st.warning(f"No hay datos disponibles en la planilla para el año {ano_nac_seleccionado_str} o hubo un error al cargar.")
+        st.warning(f"No hay datos disponibles para {ano_nac_seleccionado_str} o hubo un error al cargar.")
     elif not df_raw_data.empty:
         expected_cols = ['Nro.', 'Local', 'ResultadoL', 'ResultadoV', 'Visitante', 'Fecha y Hora', 'Estado']
         if not all(col in df_raw_data.columns for col in expected_cols):
@@ -850,11 +869,11 @@ if ano_nac_seleccionado_str:
                 # Tabla directa sin subheader redundante
                 tabla_posiciones = procesar_partidos(df_jugados)
 
-                # Estilizar la tabla (verde para Top 4, amarillo para 5-7)
+                # Estilizar la tabla (verde para Top 4, amarillo hasta el corte de clasificación)
                 def color_clasificacion(row):
                     if row.name < 4:  # Índices 0-3: Top 4 clasificación directa
                         return ['background-color: rgba(46, 204, 113, 0.15)'] * len(row)
-                    elif row.name < 7:  # Índices 4-6: zona de repechaje
+                    elif row.name < corte_top:  # Índices 4+ hasta el corte: repechaje
                         return ['background-color: rgba(241, 196, 15, 0.10)'] * len(row)
                     return [''] * len(row)
 
@@ -867,7 +886,7 @@ if ano_nac_seleccionado_str:
                 # Botón de descarga de imagen
                 col_izq, col_der = st.columns([8, 2])
                 with col_der:
-                    img_bytes = generar_imagen_tabla(tabla_posiciones, es_posiciones=True)
+                    img_bytes = generar_imagen_tabla(tabla_posiciones, es_posiciones=True, corte_top=corte_top)
                     st.download_button(
                         label="📸 Descargar",
                         data=img_bytes,

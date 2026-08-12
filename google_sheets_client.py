@@ -7,7 +7,32 @@ from google.oauth2.service_account import Credentials
 
 # ID de tu Hoja de Cálculo de Google. Lo encuentras en la URL:
 # https://docs.google.com/spreadsheets/d/ESTE_ES_EL_ID/edit#gid=0
-SPREADSHEET_ID = "1W3TjhS7WL4MnvJabFEFlaKtGC8DZKIvlI4EkB3zlCGU" 
+SPREADSHEET_ID = "1W3TjhS7WL4MnvJabFEFlaKtGC8DZKIvlI4EkB3zlCGU"
+
+# ----------------------------------------------------------------------
+# Interfaz común (misma firma que supabase_client) para que app.py
+# funcione con ambos backends sin cambios. Sheet/GSheets = fuente legacy.
+# ----------------------------------------------------------------------
+
+
+@st.cache_resource(show_spinner="Conectando a Google Sheets...")
+def get_source_client():
+    return get_gspread_client()
+
+
+def get_available_years(_spreadsheet_client) -> list[str]:
+    return get_available_birth_years(_spreadsheet_client)
+
+
+def get_default_year(_spreadsheet_client) -> str:
+    """Devuelve '2010' si existe, si no el primero disponible."""
+    years = get_available_birth_years(_spreadsheet_client)
+    return "2010" if "2010" in years else (years[0] if years else None)
+
+
+def get_corte_top(_spreadsheet_client, _division: str) -> int:
+    """En el backend legacy el corte era fijo: top 4 verde, 5-7 amarillo."""
+    return 7 
 
 @st.cache_resource(show_spinner="Conectando a Google Sheets...")
 def get_gspread_client() -> Spread:
