@@ -80,8 +80,17 @@ def _get_or_create_etapa(client, torneo_id, nombre="Regular"):
     return res.data[0]["id"]
 
 
+def _coerce_str(v):
+    """Convierte a string limpio; maneja NaN/None/numéricos."""
+    if v is None:
+        return ""
+    if isinstance(v, float) and pd.isna(v):
+        return ""
+    return str(v).strip()
+
+
 def _get_or_create_equipo(client, torneo_id, nombre):
-    nombre = (nombre or "").strip()
+    nombre = _coerce_str(nombre)
     if not nombre:
         return None
     resp = client.table("equipos").select("id").eq("torneo_id", torneo_id).eq("nombre", nombre).execute()
@@ -267,7 +276,7 @@ def _tab_pegar(client):
 
     torneos["etiqueta"] = torneos.apply(_etiqueta_torneo, axis=1)
     etiqueta = st.selectbox("Torneo", torneos["etiqueta"].tolist())
-    torneo_id = torneos.loc[torneos["etiqueta"] == etiqueta, "id"].iloc[0]
+    torneo_id = int(torneos.loc[torneos["etiqueta"] == etiqueta, "id"].iloc[0])
 
     texto = st.text_area(
         "Pegá acá las filas copiadas de bd.uar (una por línea, separadas por tab):",
@@ -372,7 +381,7 @@ def _tab_editar(client):
         return
     torneos["etiqueta"] = torneos.apply(_etiqueta_torneo, axis=1)
     etiqueta = st.selectbox("Torneo", torneos["etiqueta"].tolist(), key="edit_torneo")
-    torneo_id = torneos.loc[torneos["etiqueta"] == etiqueta, "id"].iloc[0]
+    torneo_id = int(torneos.loc[torneos["etiqueta"] == etiqueta, "id"].iloc[0])
 
     etapa_ids = _get_etapas(client, torneo_id)["id"].tolist()
     if not etapa_ids:
