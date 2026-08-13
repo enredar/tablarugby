@@ -28,6 +28,7 @@ if USE_SUPABASE:
         get_available_years,
         get_default_year,
         get_corte_top,
+        get_division_history,
     )
     from admin import render_admin
 else:
@@ -38,6 +39,7 @@ else:
         get_available_years,
         get_default_year,
         get_corte_top,
+        get_division_history,
     )
 
 @st.cache_data(show_spinner=False)
@@ -1436,9 +1438,21 @@ if ano_nac_seleccionado_str:
                         **Confianza**: Se calcula según la cantidad de datos disponibles, consistencia de resultados e historial directo.
                         """)
 
+                    # Historial completo de la división (clasificatorio + oro + plata,
+                    # y temporadas anteriores) para enriquecer promedios y el
+                    # historial directo de la bola de cristal.
+                    df_historial = get_division_history(gs_client, ano_nac_seleccionado_str)
+                    if df_historial.empty:
+                        df_hist_jugados = df_jugados.copy()
+                    else:
+                        df_hist_jugados = df_historial[df_historial["Estado"].str.startswith("Cerrado", na=True)].copy()
+                    if df_hist_jugados.empty:
+                        df_hist_jugados = df_jugados.copy()
+                    tabla_historial = procesar_partidos(df_hist_jugados) if not df_hist_jugados.empty else tabla_posiciones
+
                     if df_pendientes.empty:
                         st.info("No hay partidos pendientes para mostrar predicciones.")
-                    elif df_jugados.empty:
+                    elif df_hist_jugados.empty:
                         st.warning("No hay datos de partidos jugados (cerrados). No se pueden generar predicciones detalladas.")
                         st.dataframe(df_pendientes[["Local", "Visitante", "Fecha y Hora"]], hide_index=True, use_container_width=True)
                     else:
@@ -1470,7 +1484,7 @@ if ano_nac_seleccionado_str:
                         for _, row in df_pendientes_filtrados.iterrows():
                             local_eq = row["Local"]
                             visitante_eq = row["Visitante"]
-                            resultado = predecir_resultado(local_eq, visitante_eq, tabla_posiciones, df_jugados, parse_resultado)
+                            resultado = predecir_resultado(local_eq, visitante_eq, tabla_historial, df_hist_jugados, parse_resultado)
                             predicciones_list.append({
                                 "fecha_raw": row["Fecha y Hora"],
                                 "fecha_dt": row.get("Fecha_dt"),

@@ -77,6 +77,11 @@ def get_available_birth_years(_spreadsheet_client: Spread) -> list[str]:
     except Exception as e:
         st.warning(f"No se pudieron obtener las divisiones (pestañas) de Google Sheets: {e}")
         return ["2010", "2009", "2008", "2011", "2012"]  # Fallback
+
+
+def get_division_history(_spreadsheet_client, anio_nacimiento: str) -> pd.DataFrame:
+    """En el backend legacy no hay multi-torneo: el historial es la división actual."""
+    return get_division_data(_spreadsheet_client, anio_nacimiento)
     
 @st.cache_data(ttl="10m", show_spinner="Cargando tarjetas...")
 def get_tarjetas_data(_spreadsheet_client: Spread, anio_nacimiento: str) -> pd.DataFrame:

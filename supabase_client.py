@@ -18,24 +18,50 @@ def get_source_client() -> Client:
     return create_client(url, anon_key)
 
 
+# ---------- Helpers de torneos ----------
+
+def _tipo_torneo(nombre) -> str:
+    """Normaliza el nombre del torneo a su tipo visible.
+
+    Los torneos viejos creados por la migración tenían nombre
+    "Torneo 2010 2026" → se muestran como "Clasificatorio".
+    """
+    nombre = (nombre or "").strip()
+    if nombre.startswith("Torneo "):
+        return "Clasificatorio"
+    return nombre or "Clasificatorio"
+
+
+def _label_torneo(division: str, nombre) -> str:
+    return f"{division} · {_tipo_torneo(nombre)}"
+
+
+def _division_from_label(label: str) -> str | None:
+    """Extrae la división (año) de una etiqueta '2010 · Oro'."""
+    parts = label.split("·")
+    if not parts:
+        return None
+    return parts[0].strip()
+
+
 # ---------- Torneos ----------
 
 @st.cache_data(ttl="10m", show_spinner="Cargando torneos...")
 def get_available_years(_client: Client) -> list[str]:
-    """Lista las divisiones disponibles, formateadas como '2010 · 2026'."""
+    """Lista los torneos disponibles, formateados como '2010 · Oro'."""
     resp = _client.table("torneos").select("*").order("temporada", desc=True).execute()
     df = pd.DataFrame(resp.data)
 
     if df.empty:
         return []
 
-    # Ordenar: activo primero, luego temporada desc, luego division asc
+    # Ordenar: activo primero, luego temporada desc, luego division asc, tipo asc
     df = df.sort_values(
-        by=["activa", "temporada", "division"],
-        ascending=[False, False, True],
+        by=["activa", "temporada", "division", "nombre"],
+        ascending=[False, False, True, True],
     )
 
-    return [f"{row.division} · {row.temporada}" for _, row in df.iterrows()]
+    return [_label_torneo(row.division, row.nombre) for _, row in df.iterrows()]
 
 
 def get_default_year(_client: Client) -> str:
@@ -52,35 +78,95 @@ def get_default_year(_client: Client) -> str:
         df = df.sort_values("temporada", ascending=False)
 
     row = df.iloc[0]
-    return f"{row.division} · {row.temporada}"
+    return _label_torneo(row.division, row.nombre)
 
 
-def get_corte_top(_client: Client, division: str) -> int:
-    """Devuelve cuántos equipos clasifican para la división (para colorear)."""
-    _, _ = _client, division  # placeholder para mantener firma estable
-    return 7
+def get_corte_top(_client: Client, division_label: str) -> int:
+    """Devuelve cuántos equipos clasifican para el torneo (para colorear)."""
+    torneo_id = _torneo_id_from_label(_client, division_label)
+    if torneo_id is None:
+        return 7
+    resp = _client.table("torneos").select("corte_top").eq("id", torneo_id).execute()
+    if not resp.data:
+        return 7
+    return resp.data[0].get("corte_top") or 7
 
 
 def _torneo_id_from_label(_client: Client, label: str) -> int | None:
-    """Parsea '2010 · 2026' y devuelve el id del torneo."""
+    """Parsea '2010 · Oro' y devuelve el id del torneo (el más reciente si hay varios)."""
     parts = label.split("·")
     if len(parts) != 2:
         return None
     division = parts[0].strip()
-    temporada = int(parts[1].strip())
+    tipo = _tipo_torneo(parts[1])
 
     resp = _client.table("torneos") \
-        .select("id") \
+        .select("id, nombre, temporada") \
         .eq("division", division) \
-        .eq("temporada", temporada) \
+        .order("temporada", desc=True) \
         .execute()
 
-    if not resp.data:
-        return None
-    return resp.data[0]["id"]
+    for t in resp.data or []:
+        if _tipo_torneo(t.get("nombre")) == tipo:
+            return t["id"]
+    return None
 
 
 # ---------- Datos por división ----------
+
+@st.cache_data(ttl="10m", show_spinner="Cargando historial de la división...")
+def get_division_history(_client: Client, division_label: str) -> pd.DataFrame:
+    """
+    Une TODOS los partidos de todos los torneos de la misma división
+    (ej: 2010 Clasificatorio + 2010 Oro + 2010 Plata de todas las temporadas).
+    Se usa para historial directo y predicciones.
+
+    Devuelve las mismas columnas que get_division_data:
+    Nro., Local, ResultadoL, ResultadoV, Visitante, Fecha y Hora, Estado.
+    """
+    division = _division_from_label(division_label)
+    if division is None:
+        return pd.DataFrame()
+
+    # Todos los torneos de la división (cualquier temporada/tipo)
+    torneos = _client.table("torneos") \
+        .select("id").eq("division", division).execute()
+    if not torneos.data:
+        return pd.DataFrame()
+    torneo_ids = [t["id"] for t in torneos.data]
+
+    # Todas las etapas de esos torneos
+    etapas = _client.table("etapas") \
+        .select("id").in_("torneo_id", torneo_ids).execute()
+    etapa_ids = [e["id"] for e in etapas.data]
+    if not etapa_ids:
+        return pd.DataFrame()
+
+    partidos = _client.table("partidos") \
+        .select("id, nro, resultado_local, resultado_visitante, puntos_local, "
+                "puntos_visitante, fecha_hora, referee, estado, "
+                "local_equipo:local_equipo_id(nombre), visitante_equipo:visitante_equipo_id(nombre)") \
+        .in_("etapa_id", etapa_ids) \
+        .order("fecha_hora") \
+        .execute()
+
+    if not partidos.data:
+        return pd.DataFrame()
+
+    rows = []
+    for p in partidos.data:
+        rows.append({
+            "Nro.": p.get("nro"),
+            "Local": p["local_equipo"]["nombre"] if p.get("local_equipo") else "",
+            "ResultadoL": _formatear_resultado(p.get("resultado_local"), p.get("puntos_local")),
+            "ResultadoV": _formatear_resultado(p.get("resultado_visitante"), p.get("puntos_visitante")),
+            "Visitante": p["visitante_equipo"]["nombre"] if p.get("visitante_equipo") else "",
+            "Fecha y Hora": _formatear_fecha(p.get("fecha_hora")),
+            "Estado": p.get("estado") or "",
+        })
+
+    return pd.DataFrame(rows)
+
 
 @st.cache_data(ttl="10m", show_spinner="Cargando datos de la división...")
 def get_division_data(_client: Client, division_label: str) -> pd.DataFrame:

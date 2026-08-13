@@ -7,7 +7,7 @@
 
 create table if not exists public.torneos (
   id serial primary key,
-  nombre text not null,               -- ej: "Torneo oficial 2010 2026"
+  nombre text not null,               -- tipo del torneo: "Clasificatorio", "Oro", "Plata"
   division text not null,             -- año de nacimiento: "2010"
   temporada integer not null,         -- 2026
   corte_top integer default 7,        -- cuántos clasifican (coloreado de tabla)

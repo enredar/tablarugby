@@ -245,6 +245,18 @@ def _persistir_partidos(client, torneo_id, registros):
 
 # ---------- UI ----------
 
+def _tipo_torneo(nombre) -> str:
+    """Normaliza el nombre del torneo a su tipo visible (mismo criterio que supabase_client)."""
+    nombre = (nombre or "").strip()
+    if nombre.startswith("Torneo "):
+        return "Clasificatorio"
+    return nombre or "Clasificatorio"
+
+
+def _etiqueta_torneo(row) -> str:
+    return f"{row['division']} · {_tipo_torneo(row['nombre'])} ({row['temporada']})"
+
+
 def _tab_pegar(client):
     st.subheader("📥 Pegar partidos de bd.uar")
 
@@ -253,8 +265,7 @@ def _tab_pegar(client):
         st.warning("Todavía no hay torneos. Cargalos en la pestaña 'Torneos'.")
         return
 
-    torneos["etiqueta"] = torneos.apply(
-        lambda r: f"{r['division']} · {r['temporada']}", axis=1)
+    torneos["etiqueta"] = torneos.apply(_etiqueta_torneo, axis=1)
     etiqueta = st.selectbox("Torneo", torneos["etiqueta"].tolist())
     torneo_id = torneos.loc[torneos["etiqueta"] == etiqueta, "id"].iloc[0]
 
@@ -305,6 +316,7 @@ def _tab_torneos(client):
     with st.form("nuevo_torneo"):
         division = st.text_input("División (año de nacimiento, ej: 2010)")
         temporada = st.number_input("Temporada", min_value=2000, max_value=2100, value=2026, step=1)
+        tipo = st.selectbox("Tipo de torneo", ["Clasificatorio", "Oro", "Plata", "Regular"])
         corte_top = st.number_input("Corte clasificación (cuántos clasifican)", min_value=1, max_value=50, value=7)
         activo = st.checkbox("Activo")
         enviar = st.form_submit_button("Crear torneo")
@@ -312,12 +324,13 @@ def _tab_torneos(client):
             if not division.strip():
                 st.error("Falta la división.")
             else:
-                nombre = f"Torneo {division.strip()} {int(temporada)}"
+                nombre = tipo.strip() or "Clasificatorio"
                 existe = client.table("torneos") \
                     .select("id").eq("division", division.strip()) \
-                    .eq("temporada", int(temporada)).execute()
+                    .eq("temporada", int(temporada)) \
+                    .eq("nombre", nombre).execute()
                 if existe.data:
-                    st.error("Ya existe un torneo con esa división + temporada.")
+                    st.error("Ya existe un torneo con esa división + temporada + tipo.")
                 else:
                     torneo_id = client.table("torneos").insert({
                         "nombre": nombre, "division": division.strip(),
@@ -325,7 +338,7 @@ def _tab_torneos(client):
                         "activa": activo,
                     }).execute().data[0]["id"]
                     _get_or_create_etapa(client, torneo_id, "Regular")
-                    st.success(f"Torneo '{nombre}' creado.")
+                    st.success(f"Torneo '{division} {nombre}' creado.")
                     st.rerun()
 
     if torneos.empty:
@@ -334,7 +347,7 @@ def _tab_torneos(client):
 
     st.markdown("---")
     for _, t in torneos.iterrows():
-        with st.expander(f"{t['division']} · {t['temporada']} — {'✅ activo' if t['activa'] else 'inactivo'}"):
+        with st.expander(f"{t['division']} · {_tipo_torneo(t['nombre'])} ({t['temporada']}) — {'✅ activo' if t['activa'] else 'inactivo'}"):
             c1, c2 = st.columns([1, 1])
             nuevo_corte = c1.number_input(
                 "Corte", min_value=1, max_value=50, value=int(t["corte_top"]) if t["corte_top"] else 7,
@@ -357,7 +370,7 @@ def _tab_editar(client):
     if torneos.empty:
         st.info("No hay torneos aún.")
         return
-    torneos["etiqueta"] = torneos.apply(lambda r: f"{r['division']} · {r['temporada']}", axis=1)
+    torneos["etiqueta"] = torneos.apply(_etiqueta_torneo, axis=1)
     etiqueta = st.selectbox("Torneo", torneos["etiqueta"].tolist(), key="edit_torneo")
     torneo_id = torneos.loc[torneos["etiqueta"] == etiqueta, "id"].iloc[0]
 
@@ -521,20 +534,29 @@ def _tab_migrar(client):
 
 
 def _torneo_por_division(client, division, temporada):
-    """Busca o crea el torneo de una división para una temporada."""
+    """Busca o crea el torneo de tipo Clasificatorio para división+temporada."""
     resp = client.table("torneos") \
-        .select("id").eq("division", division) \
+        .select("id, nombre").eq("division", division) \
         .eq("temporada", temporada).execute()
     if resp.data:
+        # Preferir el torneo Clasificatorio (los viejos tienen nombre "Torneo ...")
+        for t in resp.data:
+            if _es_clasificatorio(t.get("nombre")):
+                return t["id"]
         return resp.data[0]["id"]
     res = client.table("torneos").insert({
-        "nombre": f"Torneo {division} {temporada}",
+        "nombre": "Clasificatorio",
         "division": division,
         "temporada": temporada,
         "corte_top": 7,
         "activa": True,
     }).execute()
     return res.data[0]["id"]
+
+
+def _es_clasificatorio(nombre) -> bool:
+    nombre = (nombre or "").strip()
+    return nombre == "Clasificatorio" or nombre.startswith("Torneo ")
 
 
 def _ts_fecha(v):
