@@ -62,7 +62,7 @@ def _render_login():
 # ---------- Helpers de torneos ----------
 
 def _get_torneos(client) -> pd.DataFrame:
-    resp = client.table("torneos").select("*").order("temporada", desc=True).execute()
+    resp = client.table("torneos").select("*").order("temporada", desc=True).order("id", desc=True).execute()
     return pd.DataFrame(resp.data)
 
 
@@ -275,8 +275,11 @@ def _tab_pegar(client):
         return
 
     torneos["etiqueta"] = torneos.apply(_etiqueta_torneo, axis=1)
-    etiqueta = st.selectbox("Torneo", torneos["etiqueta"].tolist())
+    etiqueta = st.selectbox("Torneo", torneos["etiqueta"].tolist(),
+                            index=0, key="pegar_torneo")
     torneo_id = int(torneos.loc[torneos["etiqueta"] == etiqueta, "id"].iloc[0])
+
+    st.info(f"Los partidos se van a guardar en **{etiqueta}**. Verificá que sea el torneo correcto.")
 
     texto = st.text_area(
         "Pegá acá las filas copiadas de bd.uar (una por línea, separadas por tab):",
@@ -311,7 +314,7 @@ def _tab_pegar(client):
     st.dataframe(preview[["Nro.", "Interpretado", "Fecha y Hora", "Estado"]],
                  use_container_width=True, hide_index=True)
 
-    if st.button("✔ Confirmar carga", type="primary"):
+    if st.button(f"✔ Confirmar carga en {etiqueta}", type="primary"):
         nuevos, actualizados = _persistir_partidos(client, torneo_id, registros)
         st.success(f"✅ {nuevos} partido(s) cargados, {actualizados} actualizado(s).")
         st.cache_data.clear()
