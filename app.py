@@ -774,9 +774,11 @@ st.markdown("""
 # --- Panel de administración (solo en modo Supabase) ---
 # Acceso oculto: se abre por URL directa con ?admin=CLAVE (sin link visible).
 # CLAVE se define en secrets como ADMIN_URL_KEY.
-if USE_SUPABASE and st.query_params.get("admin") == st.secrets.get("ADMIN_URL_KEY"):
-    render_admin()
-    st.stop()
+if USE_SUPABASE:
+    _admin_url_key = st.secrets.get("ADMIN_URL_KEY")
+    if _admin_url_key and st.query_params.get("admin") == _admin_url_key:
+        render_admin()
+        st.stop()
 
 st.markdown('<div class="main-container">', unsafe_allow_html=True)
 
