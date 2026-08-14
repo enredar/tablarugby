@@ -246,7 +246,9 @@ def get_tarjetas_data(_client: Client, division_label: str) -> pd.DataFrame:
             "Detalle": t.get("detalle") or "",
         })
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=[
+        "Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle",
+    ])
 
 
 # ---------- Helpers ----------
