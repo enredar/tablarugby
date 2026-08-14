@@ -291,6 +291,13 @@ def _tab_pegar(client):
         "Formato: `Nro. \\t Local \\t ResultadoL \\t ResultadoV \\t Visitante \\t Fecha y Hora \\t Referee \\t Estado`"
     )
 
+    # Resultado de la última carga (persiste entre reruns)
+    if st.session_state.get("pegar_resultado"):
+        st.success(st.session_state["pegar_resultado"])
+        if st.button("✖ Quitar mensaje"):
+            st.session_state.pop("pegar_resultado", None)
+            st.rerun()
+
     if not texto.strip():
         return
 
@@ -316,7 +323,7 @@ def _tab_pegar(client):
 
     if st.button(f"✔ Confirmar carga en {etiqueta}", type="primary"):
         nuevos, actualizados = _persistir_partidos(client, torneo_id, registros)
-        st.success(f"✅ {nuevos} partido(s) cargados, {actualizados} actualizado(s).")
+        st.session_state["pegar_resultado"] = f"✅ {nuevos} partido(s) cargados, {actualizados} actualizado(s)."
         st.cache_data.clear()
         st.rerun()
 
