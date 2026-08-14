@@ -5,8 +5,6 @@ El cliente de lectura usa la anon key; las escrituras usan el token del
 admin logueado (RLS exige claim role=admin).
 """
 
-import re
-
 import pandas as pd
 import streamlit as st
 from supabase import create_client, Client
