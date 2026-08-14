@@ -121,7 +121,7 @@ def parsear_pegado(texto: str) -> pd.DataFrame:
         # Saltar fila de encabezado si apareció
         if linea.lstrip().startswith("Nro.") or linea.lstrip().startswith("Nro\t"):
             continue
-        celdas = [c.strip() for c in re.split(r"\t+", linea)]
+        celdas = [c.strip() for c in linea.split("\t")]
         if len(celdas) < 7:
             continue
         nro = celdas[0]
@@ -180,6 +180,10 @@ def _puede_guardar_tabla(df):
             registro = {
                 "nro": _int_or_none(row["Nro."]),
                 "estado": _estado_normalizado(row["Estado"]),
+                "fecha_hora": _fecha_parse(row["Fecha y Hora"]),
+                "referee": row.get("Referee") or "",
+                "local_nombre": row["Local"],
+                "visitante_nombre": row["Visitante"],
             }
             if registro["estado"] == "Cerrado":
                 # Cerrado sin resultado: inconsistencia -> lo reportamos
