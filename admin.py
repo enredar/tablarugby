@@ -322,38 +322,77 @@ def _clave_tarjeta(t):
     )
 
 
+def _columnas_tarjetas(client):
+    """Devuelve las columnas reales de la tabla tarjetas (probando una a una).
+
+    Evita depender de que se hayan corrido los ALTER TABLE: solo usa columnas
+    que existan en la base.
+    """
+    candidatas = ["id", "partido_id", "equipo_id", "division", "temporada",
+                  "equipo_nombre", "documento", "fecha", "incidencia", "instancia",
+                  "rival", "momento", "detalle", "jugador"]
+    columnas = []
+    for c in candidatas:
+        try:
+            client.table("tarjetas").select(c).limit(1).execute()
+            columnas.append(c)
+        except Exception:
+            pass
+    return columnas
+
+
 def _persistir_tarjetas(client, division, temporada, df):
     """Inserta tarjetas (división + año calendario, independientes del torneo).
 
     Dedupe por código: consulta las tarjetas existentes de la división+temporada
     y salta las que ya existan (misma clave division+temporada+documento+fecha+
-    momento+incidencia). Devuelve cantidad insertada.
+    momento+incidencia). Solo usa columnas que existan en la base.
+    Devuelve cantidad insertada.
     """
+    columnas = _columnas_tarjetas(client)
+
+    def _has(col):
+        return col in columnas
+
     # Claves existentes para no duplicar
     existentes = set()
-    resp = client.table("tarjetas") \
-        .select("division, temporada, documento, fecha, momento, incidencia") \
-        .eq("division", division) \
-        .eq("temporada", temporada) \
-        .execute()
-    for row in resp.data:
-        existentes.add(_clave_tarjeta(row))
+    sel = ", ".join(c for c in ["division", "temporada", "documento", "fecha",
+                                "momento", "incidencia"] if _has(c))
+    if sel:
+        q = client.table("tarjetas").select(sel)
+        if _has("division"):
+            q = q.eq("division", division)
+        if _has("temporada"):
+            q = q.eq("temporada", temporada)
+        resp = q.execute()
+        for row in resp.data:
+            existentes.add(_clave_tarjeta(row))
 
     creadas = 0
     for _, t in df.iterrows():
-        payload = {
-            "division": division,
-            "temporada": temporada,
-            "equipo_nombre": _coerce_str(t.get("Equipo")),
-            "documento": _coerce_str(t.get("Documento")) or None,
-            "fecha": _ts_fecha(t.get("Fecha")),
-            "incidencia": _normalizar_incidencia(t.get("Incidencia")),
-            "instancia": t.get("Instancia") or "",
-            "rival": t.get("Rival") or "",
-            "momento": t.get("Momento") or "",
-            "detalle": t.get("Detalle") or "",
-            "jugador": t.get("Jugador") or "",
-        }
+        payload = {}
+        if _has("division"):
+            payload["division"] = division
+        if _has("temporada"):
+            payload["temporada"] = temporada
+        if _has("equipo_nombre"):
+            payload["equipo_nombre"] = _coerce_str(t.get("Equipo"))
+        if _has("documento"):
+            payload["documento"] = _coerce_str(t.get("Documento")) or None
+        if _has("fecha"):
+            payload["fecha"] = _ts_fecha(t.get("Fecha"))
+        if _has("incidencia"):
+            payload["incidencia"] = _normalizar_incidencia(t.get("Incidencia"))
+        if _has("instancia"):
+            payload["instancia"] = t.get("Instancia") or ""
+        if _has("rival"):
+            payload["rival"] = t.get("Rival") or ""
+        if _has("momento"):
+            payload["momento"] = t.get("Momento") or ""
+        if _has("detalle"):
+            payload["detalle"] = t.get("Detalle") or ""
+        if _has("jugador"):
+            payload["jugador"] = t.get("Jugador") or ""
         if _clave_tarjeta(payload) in existentes:
             continue
         client.table("tarjetas").insert(payload).execute()
