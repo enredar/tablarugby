@@ -32,16 +32,26 @@ def _tipo_torneo(nombre) -> str:
     return nombre or "Clasificatorio"
 
 
-def _label_torneo(division: str, nombre) -> str:
-    return f"{division} · {_tipo_torneo(nombre)}"
+def _label_torneo(division: str, nombre, temporada=None) -> str:
+    tipo = _tipo_torneo(nombre)
+    if temporada is None:
+        return f"{division} · {tipo}"
+    return f"{division} · {tipo} ({temporada})"
 
 
 def _division_from_label(label: str) -> str | None:
-    """Extrae la división (año) de una etiqueta '2010 · Oro'."""
+    """Extrae la división (año) de una etiqueta '2010 · Oro (2026)'."""
     parts = label.split("·")
     if not parts:
         return None
     return parts[0].strip()
+
+
+def _temporada_from_label(label: str) -> int | None:
+    """Extrae la temporada de '2010 · Oro (2026)' → 2026."""
+    import re
+    m = re.search(r"\((\d{4})\)", label)
+    return int(m.group(1)) if m else None
 
 
 # ---------- Torneos ----------
@@ -68,7 +78,7 @@ def get_available_years(_client: Client, incluir_archivados: bool = False) -> li
         ascending=[False, False, True, True],
     )
 
-    return [_label_torneo(row.division, row.nombre) for _, row in df.iterrows()]
+    return [_label_torneo(row.division, row.nombre, row.temporada) for _, row in df.iterrows()]
 
 
 def get_default_year(_client: Client) -> str:
@@ -85,7 +95,7 @@ def get_default_year(_client: Client) -> str:
         df = df.sort_values("temporada", ascending=False)
 
     row = df.iloc[0]
-    return _label_torneo(row.division, row.nombre)
+    return _label_torneo(row.division, row.nombre, row.temporada)
 
 
 def get_corte_top(_client: Client, division_label: str) -> int:
@@ -100,12 +110,13 @@ def get_corte_top(_client: Client, division_label: str) -> int:
 
 
 def _torneo_id_from_label(_client: Client, label: str) -> int | None:
-    """Parsea '2010 · Oro' y devuelve el id del torneo (el más reciente si hay varios)."""
+    """Parsea '2010 · Oro (2026)' y devuelve el id del torneo correspondiente."""
     parts = label.split("·")
     if len(parts) != 2:
         return None
     division = parts[0].strip()
     tipo = _tipo_torneo(parts[1])
+    temporada = _temporada_from_label(label)
 
     resp = _client.table("torneos") \
         .select("id, nombre, temporada") \
@@ -115,6 +126,8 @@ def _torneo_id_from_label(_client: Client, label: str) -> int | None:
 
     for t in resp.data or []:
         if _tipo_torneo(t.get("nombre")) == tipo:
+            if temporada is not None and int(t.get("temporada")) != temporada:
+                continue
             return t["id"]
     return None
 
