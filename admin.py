@@ -380,10 +380,12 @@ def _tab_torneos(client):
             if c2.checkbox("Activo", value=es_activo, key=f"act_{t['id']}"):
                 if not es_activo:
                     client.table("torneos").update({"activa": True}).eq("id", t["id"]).execute()
+                    st.cache_data.clear()
                     st.rerun()
             else:
                 if es_activo:
                     client.table("torneos").update({"activa": False}).eq("id", t["id"]).execute()
+                    st.cache_data.clear()
                     st.rerun()
             etapas = _get_etapas(client, t["id"])
             st.caption("Etapas: " + ", ".join(etapas["nombre"].tolist()) if not etapas.empty else "Sin etapas")
