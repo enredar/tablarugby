@@ -1433,7 +1433,7 @@ if ano_nac_seleccionado_str:
 
                         # Mostrar tabla detallada
                         st.dataframe(
-                            df_tarjetas_equipo[["Fecha", "Jugador", "Incidencia", "Instancia", "Rival", "Momento", "Detalle"]],
+                            df_tarjetas_equipo[["Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle"]],
                             use_container_width=True,
                             hide_index=True,
                             height=min(len(df_tarjetas_equipo) * 35 + 40, 600),  # Altura dinámica
@@ -1746,15 +1746,6 @@ if ano_nac_seleccionado_str:
                         hide_index=True,
                         height=min(len(resumen) * 35 + 40, 400)
                     )
-
-                    # --- 7. Detalle de cada tarjeta ---
-                    with st.expander("Ver tarjetas individuales"):
-                        st.dataframe(
-                            df_tarjetas_filt[["Fecha", "Equipo", "Jugador", "Incidencia", "Instancia", "Rival", "Momento", "Detalle"]],
-                            use_container_width=True,
-                            hide_index=True,
-                            height=min(len(df_tarjetas_filt) * 35 + 40, 600),
-                        )
 
 else:
     st.info("Esperando que cargues un archivo CSV con los resultados.")

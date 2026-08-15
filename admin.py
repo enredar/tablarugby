@@ -403,6 +403,56 @@ def _persistir_tarjetas(client, division, temporada, df):
 
 # ---------- UI ----------
 
+def _ver_tarjetas_existentes(client, division, temporada):
+    """Devuelve DataFrame con las tarjetas individuales de división+temporada (para el admin)."""
+    columnas = _columnas_tarjetas(client)
+    sel = ", ".join(c for c in ["division", "temporada", "equipo_nombre", "documento",
+                                "fecha", "incidencia", "instancia", "rival", "momento",
+                                "detalle", "jugador"] if c in columnas)
+    if not sel:
+        return pd.DataFrame()
+    q = client.table("tarjetas").select(sel)
+    if "division" in columnas:
+        q = q.eq("division", division)
+    if "temporada" in columnas:
+        q = q.eq("temporada", temporada)
+    q = q.order("fecha" if "fecha" in columnas else "id")
+    resp = q.execute()
+
+    filas = []
+    for t in resp.data:
+        fila = {}
+        if "equipo_nombre" in columnas:
+            fila["Equipo"] = t.get("equipo_nombre") or ""
+        if "fecha" in columnas:
+            fila["Fecha"] = _formatear_fecha_admin(t.get("fecha"))
+        if "jugador" in columnas:
+            fila["Jugador"] = t.get("jugador") or ""
+        if "documento" in columnas:
+            fila["Documento"] = t.get("documento") or ""
+        if "incidencia" in columnas:
+            fila["Incidencia"] = t.get("incidencia") or ""
+        if "instancia" in columnas:
+            fila["Instancia"] = t.get("instancia") or ""
+        if "rival" in columnas:
+            fila["Rival"] = t.get("rival") or ""
+        if "momento" in columnas:
+            fila["Momento"] = t.get("momento") or ""
+        if "detalle" in columnas:
+            fila["Detalle"] = t.get("detalle") or ""
+        filas.append(fila)
+    return pd.DataFrame(filas)
+
+
+def _formatear_fecha_admin(iso):
+    if not iso:
+        return ""
+    dt = pd.to_datetime(iso)
+    if dt.tzinfo is not None:
+        dt = dt.tz_localize(None)
+    return dt.strftime("%d/%m/%Y")
+
+
 def _tab_tarjetas(client):
     st.subheader("🟨🟥 Pegar tarjetas")
     st.markdown(
@@ -413,6 +463,12 @@ def _tab_tarjetas(client):
 
     division = st.text_input("División (año de nacimiento, ej: 2010)")
     temporada = st.number_input("Temporada", min_value=2000, max_value=2100, value=2026, step=1)
+
+    if division.strip():
+        df_existentes = _ver_tarjetas_existentes(client, division.strip(), int(temporada))
+        if not df_existentes.empty:
+            with st.expander(f"📋 {len(df_existentes)} tarjeta(s) existentes para {division.strip()} · {int(temporada)}"):
+                st.dataframe(df_existentes, use_container_width=True, hide_index=True)
 
     texto = st.text_area(
         "Pegá acá las filas copiadas de bd.uar (una por línea, separadas por tab):",
