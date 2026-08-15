@@ -47,13 +47,20 @@ def _division_from_label(label: str) -> str | None:
 # ---------- Torneos ----------
 
 @st.cache_data(ttl="10m", show_spinner="Cargando torneos...")
-def get_available_years(_client: Client) -> list[str]:
-    """Lista los torneos disponibles, formateados como '2010 · Oro'."""
+def get_available_years(_client: Client, incluir_archivados: bool = False) -> list[str]:
+    """Lista los torneos disponibles, formateados como '2010 · Oro'.
+
+    Por defecto solo devuelve los torneos activos. Con `incluir_archivados=True`
+    devuelve todos (activos + archivados).
+    """
     resp = _client.table("torneos").select("*").order("temporada", desc=True).execute()
     df = pd.DataFrame(resp.data)
 
     if df.empty:
         return []
+
+    if not incluir_archivados:
+        df = df[df["activa"] == True]
 
     # Ordenar: activo primero, luego temporada desc, luego division asc, tipo asc
     df = df.sort_values(

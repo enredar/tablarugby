@@ -789,6 +789,8 @@ gs_client = get_gspread_client()
 
 # --- Selección de División (Año de Nacimiento o Torneos) ---
 available_years_str = get_available_years(gs_client)
+archived_years_str = [y for y in get_available_years(gs_client, incluir_archivados=True)
+                      if y not in available_years_str]
 
 # Filtrar las hojas de tarjetas (las que terminan en 'T' si su contraparte existe)
 options_for_selectbox = [y for y in available_years_str if not (y.endswith("T") and y[:-1] in available_years_str)]
@@ -823,6 +825,11 @@ if "ano_nac_seleccionado_str" not in st.session_state:
 
 ano_nac_seleccionado_str = st.session_state["ano_nac_seleccionado_str"]
 
+# Si el torneo seleccionado es uno archivado, lo agregamos a las opciones
+# para que quede seleccionado en el selector.
+if ano_nac_seleccionado_str not in options_str:
+    options_str = options_str + [ano_nac_seleccionado_str]
+
 # Selector funcional (radio estilizado como pills por CSS)
 selected = st.radio(
     "cat", options=options_str,
@@ -833,6 +840,15 @@ selected = st.radio(
 if selected != ano_nac_seleccionado_str:
     st.session_state["ano_nac_seleccionado_str"] = selected
     st.rerun()
+
+# --- Torneos archivados (fuera de la vista, accesibles para consulta) ---
+if archived_years_str:
+    with st.expander(f"🗂️ Torneos archivados ({len(archived_years_str)})"):
+        st.caption("Torneos anteriores o cerrados. Quedaron fuera del selector, pero podés consultarlos:")
+        for etq in archived_years_str:
+            if st.button(etq, key=f"arch_{etq}", use_container_width=True):
+                st.session_state["ano_nac_seleccionado_str"] = etq
+                st.rerun()
 
 # Botón para forzar actualización de datos desde la planilla
 if st.button("🔄 Actualizar datos", use_container_width=False, key="btn_refresh_data"):

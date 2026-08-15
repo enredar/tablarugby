@@ -376,10 +376,15 @@ def _tab_torneos(client):
             if c1.button("Guardar corte", key=f"btn_corte_{t['id']}"):
                 client.table("torneos").update({"corte_top": int(nuevo_corte)}).eq("id", t["id"]).execute()
                 st.rerun()
-            if c2.button("Activar", key=f"act_{t['id']}"):
-                client.table("torneos").update({"activa": True}).eq("id", t["id"]).execute()
-                client.table("torneos").update({"activa": False}).ne("id", t["id"]).execute()
-                st.rerun()
+            es_activo = bool(t["activa"])
+            if c2.checkbox("Activo", value=es_activo, key=f"act_{t['id']}"):
+                if not es_activo:
+                    client.table("torneos").update({"activa": True}).eq("id", t["id"]).execute()
+                    st.rerun()
+            else:
+                if es_activo:
+                    client.table("torneos").update({"activa": False}).eq("id", t["id"]).execute()
+                    st.rerun()
             etapas = _get_etapas(client, t["id"])
             st.caption("Etapas: " + ", ".join(etapas["nombre"].tolist()) if not etapas.empty else "Sin etapas")
 
