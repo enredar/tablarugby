@@ -303,15 +303,17 @@ def _normalizar_incidencia(incidencia: str) -> str:
     return incidencia or "Amarilla"
 
 
-def _persistir_tarjetas(client, torneo_id, df):
-    """Inserta tarjetas en la división+temporada. Devuelve cantidad creada."""
+def _persistir_tarjetas(client, division, temporada, df):
+    """Inserta tarjetas (división + año calendario, independientes del torneo).
+
+    Devuelve cantidad creada.
+    """
     creadas = 0
     for _, t in df.iterrows():
-        eq_id = _get_or_create_equipo(client, torneo_id, t.get("Equipo"))
-        if eq_id is None:
-            continue
         client.table("tarjetas").insert({
-            "equipo_id": eq_id,
+            "division": division,
+            "temporada": temporada,
+            "equipo_nombre": _coerce_str(t.get("Equipo")),
             "fecha": _ts_fecha(t.get("Fecha")),
             "incidencia": _normalizar_incidencia(t.get("Incidencia")),
             "instancia": t.get("Instancia") or "",
@@ -329,9 +331,9 @@ def _persistir_tarjetas(client, torneo_id, df):
 def _tab_tarjetas(client):
     st.subheader("🟨🟥 Pegar tarjetas")
     st.markdown(
-        "Las tarjetas son por **año calendario** (no por torneo). Elegí división y "
-        "temporada; las tarjetas se suman a todos los torneos de ese año (Oro, Plata, "
-        "Clasificatorio)."
+        "Las tarjetas son por **división + año calendario**, no por torneo: se guardan "
+        "contra el club directamente (todos los clubes de la división, sin importar en "
+        "qué torneo jueguen) y aparecen en todas las vistas de ese año."
     )
 
     division = st.text_input("División (año de nacimiento, ej: 2010)")
@@ -369,10 +371,9 @@ def _tab_tarjetas(client):
     cols = [c for c in TARJETAS_COLUMNAS if c in preview.columns]
     st.dataframe(preview[cols], use_container_width=True, hide_index=True)
 
-    etiqueta = f"{division.strip()} · Clasificatorio ({int(temporada)})"
-    if st.button(f"✔ Confirmar carga de {len(df)} tarjeta(s) en {etiqueta}", type="primary"):
-        torneo_id = _torneo_por_division(client, division.strip(), int(temporada))
-        creadas = _persistir_tarjetas(client, torneo_id, df)
+    etiqueta = f"{division.strip()} · {int(temporada)}"
+    if st.button(f"✔ Confirmar carga de {len(df)} tarjeta(s) para {etiqueta}", type="primary"):
+        creadas = _persistir_tarjetas(client, division.strip(), int(temporada), df)
         st.session_state["tarjetas_resultado"] = f"✅ {creadas} tarjeta(s) cargadas para {etiqueta}."
         st.cache_data.clear()
         st.rerun()
@@ -614,16 +615,14 @@ def _tab_migrar(client):
             if df.empty:
                 status.write(f"  • {division}: sin datos de tarjetas")
                 continue
-            torneo_id = _torneo_por_division(client, anio, int(temporada))
             creadas = 0
             for _, t in df.iterrows():
-                eq_id = _get_or_create_equipo(client, torneo_id, t.get("Equipo"))
-                if eq_id is None:
-                    continue
                 client.table("tarjetas").insert({
-                    "equipo_id": eq_id,
+                    "division": anio,
+                    "temporada": int(temporada),
+                    "equipo_nombre": _coerce_str(t.get("Equipo")),
                     "fecha": _ts_fecha(t.get("Fecha")),
-                    "incidencia": t.get("Incidencia"),
+                    "incidencia": _normalizar_incidencia(t.get("Incidencia")),
                     "instancia": t.get("Instancia"),
                     "rival": t.get("Rival"),
                     "momento": t.get("Momento"),

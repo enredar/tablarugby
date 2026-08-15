@@ -50,6 +50,9 @@ create table if not exists public.tarjetas (
   id serial primary key,
   partido_id integer references public.partidos(id) on delete set null,
   equipo_id integer references public.equipos(id),
+  division text,                      -- año de nacimiento (ej: "2010")
+  temporada integer,                  -- año calendario (ej: 2026)
+  equipo_nombre text,                 -- nombre del club (independiente del torneo)
   fecha timestamp,
   incidencia text,                    -- amarilla / roja / azul
   instancia text,

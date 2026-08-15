@@ -248,43 +248,51 @@ def get_division_data(_client: Client, division_label: str) -> pd.DataFrame:
 def get_tarjetas_data(_client: Client, division_label: str) -> pd.DataFrame:
     """Devuelve las tarjetas de la división con las mismas columnas que antes.
 
-    Las tarjetas son por AÑO CALENDARIO, no por torneo: para el label
-    '2010 · Oro (2026)' se juntan las tarjetas de todos los torneos de la
-    división 2010 en la temporada 2026 (Oro + Plata + Clasificatorio).
+    Las tarjetas son por DIVISIÓN + AÑO CALENDARIO (no por torneo): se buscan
+    por el par (division, temporada) extraído del label '2010 · Oro (2026)'.
+    Datos viejos con equipo_id (sin division/temporada) se resuelven buscando
+    los equipos de todos los torneos de la división en esa temporada.
     """
     division = _division_from_label(division_label)
     temporada = _temporada_from_label(division_label)
     if division is None:
         return pd.DataFrame()
 
-    # Todos los torneos de la división en esa temporada
-    q = _client.table("torneos").select("id").eq("division", division)
+    # Tarjetas nuevas: identificadas por division + temporada + equipo_nombre
+    q = _client.table("tarjetas").select(
+        "id, equipo_id, equipo_nombre, division, temporada, fecha, incidencia, "
+        "instancia, rival, momento, detalle, jugador"
+    ).eq("division", division)
     if temporada is not None:
         q = q.eq("temporada", temporada)
-    torneos = q.execute()
-    if not torneos.data:
-        return pd.DataFrame()
-    torneo_ids = [t["id"] for t in torneos.data]
+    nuevas = q.execute().data or []
 
-    # Equipos de todos esos torneos (el mismo club puede tener un equipo por torneo)
-    equipos = _client.table("equipos") \
-        .select("id, nombre") \
-        .in_("torneo_id", torneo_ids) \
-        .execute()
-    if not equipos.data:
-        return pd.DataFrame()
-
-    # Si el mismo club aparece en varios torneos, sumamos sus tarjetas por nombre
-    equipo_by_id = {e["id"]: e["nombre"] for e in equipos.data}
-    tarjetas = _client.table("tarjetas") \
-        .select("id, equipo_id, fecha, incidencia, instancia, rival, momento, detalle, jugador") \
-        .in_("equipo_id", list(equipo_by_id.keys())) \
-        .execute()
+    # Tarjetas viejas: con equipo_id sin division/temporada -> resolver por torneos de la división
+    viejas = []
+    if temporada is not None:
+        torneos = _client.table("torneos") \
+            .select("id").eq("division", division).eq("temporada", temporada).execute()
+        if torneos.data:
+            torneo_ids = [t["id"] for t in torneos.data]
+            equipos = _client.table("equipos") \
+                .select("id, nombre") \
+                .in_("torneo_id", torneo_ids) \
+                .execute()
+            if equipos.data:
+                equipo_by_id = {e["id"]: e["nombre"] for e in equipos.data}
+                viejas = _client.table("tarjetas") \
+                    .select("id, equipo_id, equipo_nombre, division, temporada, fecha, incidencia, "
+                            "instancia, rival, momento, detalle, jugador") \
+                    .in_("equipo_id", list(equipo_by_id.keys())) \
+                    .is_("division", "null") \
+                    .execute().data or []
+                for t in viejas:
+                    t["equipo_nombre"] = equipo_by_id.get(t.get("equipo_id"), "")
 
     rows = []
-    for t in tarjetas.data:
+    for t in nuevas + viejas:
         rows.append({
-            "Equipo": equipo_by_id.get(t.get("equipo_id"), ""),
+            "Equipo": t.get("equipo_nombre") or "",
             "Fecha": _formatear_fecha(t.get("fecha")),
             "Incidencia": t.get("incidencia") or "",
             "Instancia": t.get("instancia") or "",
