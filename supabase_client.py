@@ -109,13 +109,24 @@ def get_corte_top(_client: Client, division_label: str) -> int:
     return resp.data[0].get("corte_top") or 7
 
 
+def _tipo_from_label(label: str) -> str:
+    """Extrae el tipo visible de '2010 · Oro (2026)' → 'Oro'."""
+    parts = label.split("·")
+    if len(parts) != 2:
+        return ""
+    parte = parts[1].strip()
+    import re
+    parte = re.sub(r"\(\d{4}\)\s*$", "", parte).strip()
+    return _tipo_torneo(parte)
+
+
 def _torneo_id_from_label(_client: Client, label: str) -> int | None:
     """Parsea '2010 · Oro (2026)' y devuelve el id del torneo correspondiente."""
     parts = label.split("·")
     if len(parts) != 2:
         return None
     division = parts[0].strip()
-    tipo = _tipo_torneo(parts[1])
+    tipo = _tipo_from_label(label)
     temporada = _temporada_from_label(label)
 
     resp = _client.table("torneos") \
