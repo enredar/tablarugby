@@ -304,13 +304,41 @@ def _normalizar_incidencia(incidencia: str) -> str:
     return incidencia or "Amarilla"
 
 
+def _clave_tarjeta(t):
+    """Clave de dedupe: division + temporada + documento + fecha + momento + incidencia."""
+    fecha = _ts_fecha(t.get("fecha") if "fecha" in t else t.get("Fecha"))
+    if fecha:
+        try:
+            fecha = str(pd.to_datetime(fecha).date())
+        except Exception:
+            fecha = str(fecha)[:10]
+    return (
+        (t.get("division") or "").strip(),
+        int(t.get("temporada") or 0),
+        _coerce_str(t.get("documento")),
+        fecha or "",
+        _coerce_str(t.get("momento")),
+        _normalizar_incidencia(t.get("incidencia")),
+    )
+
+
 def _persistir_tarjetas(client, division, temporada, df):
     """Inserta tarjetas (división + año calendario, independientes del torneo).
 
-    Usa upsert con `ignore_duplicates`: si la fila ya existe (mismo
-    division + temporada + documento + fecha + momento + incidencia) no la
-    duplica. Devuelve cantidad creada/confirmada.
+    Dedupe por código: consulta las tarjetas existentes de la división+temporada
+    y salta las que ya existan (misma clave division+temporada+documento+fecha+
+    momento+incidencia). Devuelve cantidad insertada.
     """
+    # Claves existentes para no duplicar
+    existentes = set()
+    resp = client.table("tarjetas") \
+        .select("division, temporada, documento, fecha, momento, incidencia") \
+        .eq("division", division) \
+        .eq("temporada", temporada) \
+        .execute()
+    for row in resp.data:
+        existentes.add(_clave_tarjeta(row))
+
     creadas = 0
     for _, t in df.iterrows():
         payload = {
@@ -326,10 +354,10 @@ def _persistir_tarjetas(client, division, temporada, df):
             "detalle": t.get("Detalle") or "",
             "jugador": t.get("Jugador") or "",
         }
-        client.table("tarjetas") \
-            .upsert(payload, on_conflict="division,temporada,documento,fecha,momento,incidencia",
-                    ignore_duplicates=True) \
-            .execute()
+        if _clave_tarjeta(payload) in existentes:
+            continue
+        client.table("tarjetas").insert(payload).execute()
+        existentes.add(_clave_tarjeta(payload))
         creadas += 1
     return creadas
 
