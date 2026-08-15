@@ -254,7 +254,101 @@ def _persistir_partidos(client, torneo_id, registros):
     return nuevos, actualizados
 
 
+TARJETAS_COLUMNAS = ["Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle"]
+
+
+def parsear_tarjetas(texto: str) -> pd.DataFrame:
+    """Parsea el texto pegado de tarjetas (filas separadas por tabs).
+
+    Formato: Equipo | Fecha | Incidencia | Instancia | Rival | Momento | Detalle
+    """
+    filas = []
+    for linea in texto.splitlines():
+        linea = linea.strip()
+        if not linea:
+            continue
+        celdas = [c.strip() for c in linea.split("\t")]
+        if len(celdas) < 1 or not celdas[0]:
+            continue
+        fila = {}
+        for i, col in enumerate(TARJETAS_COLUMNAS):
+            fila[col] = celdas[i] if i < len(celdas) else ""
+        filas.append(fila)
+    return pd.DataFrame(filas, columns=TARJETAS_COLUMNAS)
+
+
+def _persistir_tarjetas(client, torneo_id, df):
+    """Inserta tarjetas en la división+temporada. Devuelve cantidad creada."""
+    creadas = 0
+    for _, t in df.iterrows():
+        eq_id = _get_or_create_equipo(client, torneo_id, t.get("Equipo"))
+        if eq_id is None:
+            continue
+        client.table("tarjetas").insert({
+            "equipo_id": eq_id,
+            "fecha": _ts_fecha(t.get("Fecha")),
+            "incidencia": t.get("Incidencia") or "",
+            "instancia": t.get("Instancia") or "",
+            "rival": t.get("Rival") or "",
+            "momento": t.get("Momento") or "",
+            "detalle": t.get("Detalle") or "",
+        }).execute()
+        creadas += 1
+    return creadas
+
+
 # ---------- UI ----------
+
+def _tab_tarjetas(client):
+    st.subheader("🟨🟥 Pegar tarjetas")
+    st.markdown(
+        "Las tarjetas son por **año calendario** (no por torneo). Elegí división y "
+        "temporada; las tarjetas se suman a todos los torneos de ese año (Oro, Plata, "
+        "Clasificatorio)."
+    )
+
+    division = st.text_input("División (año de nacimiento, ej: 2010)")
+    temporada = st.number_input("Temporada", min_value=2000, max_value=2100, value=2026, step=1)
+
+    texto = st.text_area(
+        "Pegá acá las filas copiadas (una por línea, separadas por tab):",
+        height=220,
+        placeholder="Equipo\tFecha\tIncidencia\tInstancia\tRival\tMomento\tDetalle\n"
+                    "LOS 50\t15/08/2026\tAmarilla\tRegular\tBIGUA\t22'\tEntrada fuerte",
+    )
+
+    st.markdown("Formato: `Equipo \\t Fecha \\t Incidencia \\t Instancia \\t Rival \\t Momento \\t Detalle`")
+
+    # Resultado de la última carga (persiste entre reruns)
+    if st.session_state.get("tarjetas_resultado"):
+        st.success(st.session_state["tarjetas_resultado"])
+        if st.button("✖ Quitar mensaje", key="tarj_quit"):
+            st.session_state.pop("tarjetas_resultado", None)
+            st.rerun()
+
+    if not division.strip() or not texto.strip():
+        return
+
+    df = parsear_tarjetas(texto)
+    if df.empty:
+        st.warning("No se detectaron filas.")
+        return
+
+    st.markdown(f"Se detectaron **{len(df)} filas**.")
+    preview = df.copy()
+    preview["Interpretado"] = preview.apply(
+        lambda r: f"{r['Equipo']} · {r['Incidencia']} vs {r['Rival']} ({r['Fecha'] or '-'})", axis=1)
+    st.dataframe(preview[["Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle"]],
+                 use_container_width=True, hide_index=True)
+
+    etiqueta = f"{division.strip()} · Clasificatorio ({int(temporada)})"
+    if st.button(f"✔ Confirmar carga de {len(df)} tarjeta(s) en {etiqueta}", type="primary"):
+        torneo_id = _torneo_por_division(client, division.strip(), int(temporada))
+        creadas = _persistir_tarjetas(client, torneo_id, df)
+        st.session_state["tarjetas_resultado"] = f"✅ {creadas} tarjeta(s) cargadas para {etiqueta}."
+        st.cache_data.clear()
+        st.rerun()
+
 
 def _tipo_torneo(nombre) -> str:
     """Normaliza el nombre del torneo a su tipo visible (mismo criterio que supabase_client)."""
@@ -616,8 +710,8 @@ def render_admin():
         st.error(f"No se pudo conectar: {e}")
         return
 
-    tab_pegar, tab_edit, tab_tor, tab_mig = st.tabs(
-        ["📥 Pegar partidos", "✏️ Editar partido", "🏆 Torneos", "🔁 Migrar planilla"])
+    tab_pegar, tab_edit, tab_tor, tab_mig, tab_tarj = st.tabs(
+        ["📥 Pegar partidos", "✏️ Editar partido", "🏆 Torneos", "🔁 Migrar planilla", "🟨🟥 Pegar tarjetas"])
     with tab_pegar:
         _tab_pegar(client)
     with tab_edit:
@@ -626,3 +720,5 @@ def render_admin():
         _tab_torneos(client)
     with tab_mig:
         _tab_migrar(client)
+    with tab_tarj:
+        _tab_tarjetas(client)
