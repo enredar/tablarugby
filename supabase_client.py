@@ -246,20 +246,36 @@ def get_division_data(_client: Client, division_label: str) -> pd.DataFrame:
 
 @st.cache_data(ttl="10m", show_spinner="Cargando tarjetas...")
 def get_tarjetas_data(_client: Client, division_label: str) -> pd.DataFrame:
-    """Devuelve las tarjetas de la división con las mismas columnas que antes."""
-    torneo_id = _torneo_id_from_label(_client, division_label)
-    if torneo_id is None:
+    """Devuelve las tarjetas de la división con las mismas columnas que antes.
+
+    Las tarjetas son por AÑO CALENDARIO, no por torneo: para el label
+    '2010 · Oro (2026)' se juntan las tarjetas de todos los torneos de la
+    división 2010 en la temporada 2026 (Oro + Plata + Clasificatorio).
+    """
+    division = _division_from_label(division_label)
+    temporada = _temporada_from_label(division_label)
+    if division is None:
         return pd.DataFrame()
 
-    # Equipos del torneo
+    # Todos los torneos de la división en esa temporada
+    q = _client.table("torneos").select("id").eq("division", division)
+    if temporada is not None:
+        q = q.eq("temporada", temporada)
+    torneos = q.execute()
+    if not torneos.data:
+        return pd.DataFrame()
+    torneo_ids = [t["id"] for t in torneos.data]
+
+    # Equipos de todos esos torneos (el mismo club puede tener un equipo por torneo)
     equipos = _client.table("equipos") \
         .select("id, nombre") \
-        .eq("torneo_id", torneo_id) \
+        .in_("torneo_id", torneo_ids) \
         .execute()
-    equipo_by_id = {e["id"]: e["nombre"] for e in equipos.data}
-    if not equipo_by_id:
+    if not equipos.data:
         return pd.DataFrame()
 
+    # Si el mismo club aparece en varios torneos, sumamos sus tarjetas por nombre
+    equipo_by_id = {e["id"]: e["nombre"] for e in equipos.data}
     tarjetas = _client.table("tarjetas") \
         .select("id, equipo_id, fecha, incidencia, instancia, rival, momento, detalle") \
         .in_("equipo_id", list(equipo_by_id.keys())) \
