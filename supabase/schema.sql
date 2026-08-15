@@ -55,7 +55,8 @@ create table if not exists public.tarjetas (
   instancia text,
   rival text,
   momento text,
-  detalle text
+  detalle text,
+  jugador text                        -- nombre del jugador (formato bd.uar)
 );
 
 -- ---------- Índices ----------

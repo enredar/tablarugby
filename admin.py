@@ -254,13 +254,17 @@ def _persistir_partidos(client, torneo_id, registros):
     return nuevos, actualizados
 
 
-TARJETAS_COLUMNAS = ["Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle"]
+TARJETAS_COLUMNAS = ["Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle", "Jugador"]
 
 
 def parsear_tarjetas(texto: str) -> pd.DataFrame:
     """Parsea el texto pegado de tarjetas (filas separadas por tabs).
 
-    Formato: Equipo | Fecha | Incidencia | Instancia | Rival | Momento | Detalle
+    Acepta dos formatos:
+    - bd.uar (9 columnas): Fecha | Equipo | DNI | Jugador | Incidencia |
+      Instancia | Rival | Momento | Detalle
+    - simple (7 columnas): Equipo | Fecha | Incidencia | Instancia | Rival |
+      Momento | Detalle
     """
     filas = []
     for linea in texto.splitlines():
@@ -268,13 +272,35 @@ def parsear_tarjetas(texto: str) -> pd.DataFrame:
         if not linea:
             continue
         celdas = [c.strip() for c in linea.split("\t")]
-        if len(celdas) < 1 or not celdas[0]:
+        if not celdas or not celdas[0]:
+            continue
+        if len(celdas) >= 9:
+            # Formato bd.uar: Fecha, Equipo, DNI, Jugador, Incidencia, ...
+            fecha, equipo = celdas[0], celdas[1]
+            jugador = celdas[3]
+            incidencia = celdas[4]
+            instancia = celdas[5] if len(celdas) > 5 else ""
+            rival = celdas[6] if len(celdas) > 6 else ""
+            momento = celdas[7] if len(celdas) > 7 else ""
+            detalle = celdas[8] if len(celdas) > 8 else ""
+            filas.append({
+                "Equipo": equipo, "Fecha": fecha, "Incidencia": incidencia,
+                "Instancia": instancia, "Rival": rival, "Momento": momento,
+                "Detalle": detalle, "Jugador": jugador,
+            })
             continue
         fila = {}
         for i, col in enumerate(TARJETAS_COLUMNAS):
             fila[col] = celdas[i] if i < len(celdas) else ""
         filas.append(fila)
     return pd.DataFrame(filas, columns=TARJETAS_COLUMNAS)
+
+
+def _normalizar_incidencia(incidencia: str) -> str:
+    """'tarjeta-amarilla.ico Amarilla' -> 'Amarilla'."""
+    incidencia = (incidencia or "").strip()
+    incidencia = incidencia.split(".ico")[-1].strip()
+    return incidencia or "Amarilla"
 
 
 def _persistir_tarjetas(client, torneo_id, df):
@@ -287,11 +313,12 @@ def _persistir_tarjetas(client, torneo_id, df):
         client.table("tarjetas").insert({
             "equipo_id": eq_id,
             "fecha": _ts_fecha(t.get("Fecha")),
-            "incidencia": t.get("Incidencia") or "",
+            "incidencia": _normalizar_incidencia(t.get("Incidencia")),
             "instancia": t.get("Instancia") or "",
             "rival": t.get("Rival") or "",
             "momento": t.get("Momento") or "",
             "detalle": t.get("Detalle") or "",
+            "jugador": t.get("Jugador") or "",
         }).execute()
         creadas += 1
     return creadas
@@ -311,13 +338,14 @@ def _tab_tarjetas(client):
     temporada = st.number_input("Temporada", min_value=2000, max_value=2100, value=2026, step=1)
 
     texto = st.text_area(
-        "Pegá acá las filas copiadas (una por línea, separadas por tab):",
+        "Pegá acá las filas copiadas de bd.uar (una por línea, separadas por tab):",
         height=220,
-        placeholder="Equipo\tFecha\tIncidencia\tInstancia\tRival\tMomento\tDetalle\n"
-                    "LOS 50\t15/08/2026\tAmarilla\tRegular\tBIGUA\t22'\tEntrada fuerte",
+        placeholder="15/03/2026\tCOMERCIAL\t50403071\tMederos, Mateo Joaquín\ttarjeta-amarilla.ico Amarilla\tFecha 1\tLOS 50\t2T 24\tDisciplina (DI)",
     )
 
-    st.markdown("Formato: `Equipo \\t Fecha \\t Incidencia \\t Instancia \\t Rival \\t Momento \\t Detalle`")
+    st.markdown(
+        "Formato bd.uar: `Fecha \\t Equipo \\t DNI \\t Jugador \\t Incidencia \\t Instancia \\t Rival \\t Momento \\t Detalle`"
+    )
 
     # Resultado de la última carga (persiste entre reruns)
     if st.session_state.get("tarjetas_resultado"):
@@ -338,8 +366,8 @@ def _tab_tarjetas(client):
     preview = df.copy()
     preview["Interpretado"] = preview.apply(
         lambda r: f"{r['Equipo']} · {r['Incidencia']} vs {r['Rival']} ({r['Fecha'] or '-'})", axis=1)
-    st.dataframe(preview[["Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle"]],
-                 use_container_width=True, hide_index=True)
+    cols = [c for c in TARJETAS_COLUMNAS if c in preview.columns]
+    st.dataframe(preview[cols], use_container_width=True, hide_index=True)
 
     etiqueta = f"{division.strip()} · Clasificatorio ({int(temporada)})"
     if st.button(f"✔ Confirmar carga de {len(df)} tarjeta(s) en {etiqueta}", type="primary"):

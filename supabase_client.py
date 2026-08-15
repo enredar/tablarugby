@@ -277,7 +277,7 @@ def get_tarjetas_data(_client: Client, division_label: str) -> pd.DataFrame:
     # Si el mismo club aparece en varios torneos, sumamos sus tarjetas por nombre
     equipo_by_id = {e["id"]: e["nombre"] for e in equipos.data}
     tarjetas = _client.table("tarjetas") \
-        .select("id, equipo_id, fecha, incidencia, instancia, rival, momento, detalle") \
+        .select("id, equipo_id, fecha, incidencia, instancia, rival, momento, detalle, jugador") \
         .in_("equipo_id", list(equipo_by_id.keys())) \
         .execute()
 
@@ -291,10 +291,11 @@ def get_tarjetas_data(_client: Client, division_label: str) -> pd.DataFrame:
             "Rival": t.get("rival") or "",
             "Momento": t.get("momento") or "",
             "Detalle": t.get("detalle") or "",
+            "Jugador": t.get("jugador") or "",
         })
 
     return pd.DataFrame(rows, columns=[
-        "Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle",
+        "Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle", "Jugador",
     ])
 
 
