@@ -261,7 +261,7 @@ def get_tarjetas_data(_client: Client, division_label: str) -> pd.DataFrame:
     # Tarjetas nuevas: identificadas por division + temporada + equipo_nombre
     q = _client.table("tarjetas").select(
         "id, equipo_id, equipo_nombre, division, temporada, fecha, incidencia, "
-        "instancia, rival, momento, detalle, jugador"
+        "instancia, rival, momento, detalle, jugador, documento"
     ).eq("division", division)
     if temporada is not None:
         q = q.eq("temporada", temporada)
@@ -282,7 +282,7 @@ def get_tarjetas_data(_client: Client, division_label: str) -> pd.DataFrame:
                 equipo_by_id = {e["id"]: e["nombre"] for e in equipos.data}
                 viejas = _client.table("tarjetas") \
                     .select("id, equipo_id, equipo_nombre, division, temporada, fecha, incidencia, "
-                            "instancia, rival, momento, detalle, jugador") \
+                            "instancia, rival, momento, detalle, jugador, documento") \
                     .in_("equipo_id", list(equipo_by_id.keys())) \
                     .is_("division", "null") \
                     .execute().data or []
@@ -300,10 +300,12 @@ def get_tarjetas_data(_client: Client, division_label: str) -> pd.DataFrame:
             "Momento": t.get("momento") or "",
             "Detalle": t.get("detalle") or "",
             "Jugador": t.get("jugador") or "",
+            "Documento": t.get("documento") or "",
         })
 
     return pd.DataFrame(rows, columns=[
-        "Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle", "Jugador",
+        "Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle",
+        "Jugador", "Documento",
     ])
 
 

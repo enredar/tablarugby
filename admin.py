@@ -254,7 +254,7 @@ def _persistir_partidos(client, torneo_id, registros):
     return nuevos, actualizados
 
 
-TARJETAS_COLUMNAS = ["Equipo", "Fecha", "Incidencia", "Instancia", "Rival", "Momento", "Detalle", "Jugador"]
+TARJETAS_COLUMNAS = ["Equipo", "Fecha", "Documento", "Incidencia", "Instancia", "Rival", "Momento", "Detalle", "Jugador"]
 
 
 def parsear_tarjetas(texto: str) -> pd.DataFrame:
@@ -277,6 +277,7 @@ def parsear_tarjetas(texto: str) -> pd.DataFrame:
         if len(celdas) >= 9:
             # Formato bd.uar: Fecha, Equipo, DNI, Jugador, Incidencia, ...
             fecha, equipo = celdas[0], celdas[1]
+            documento = celdas[2]
             jugador = celdas[3]
             incidencia = celdas[4]
             instancia = celdas[5] if len(celdas) > 5 else ""
@@ -284,9 +285,9 @@ def parsear_tarjetas(texto: str) -> pd.DataFrame:
             momento = celdas[7] if len(celdas) > 7 else ""
             detalle = celdas[8] if len(celdas) > 8 else ""
             filas.append({
-                "Equipo": equipo, "Fecha": fecha, "Incidencia": incidencia,
-                "Instancia": instancia, "Rival": rival, "Momento": momento,
-                "Detalle": detalle, "Jugador": jugador,
+                "Equipo": equipo, "Fecha": fecha, "Documento": documento,
+                "Incidencia": incidencia, "Instancia": instancia, "Rival": rival,
+                "Momento": momento, "Detalle": detalle, "Jugador": jugador,
             })
             continue
         fila = {}
@@ -306,14 +307,17 @@ def _normalizar_incidencia(incidencia: str) -> str:
 def _persistir_tarjetas(client, division, temporada, df):
     """Inserta tarjetas (división + año calendario, independientes del torneo).
 
-    Devuelve cantidad creada.
+    Usa upsert con `ignore_duplicates`: si la fila ya existe (mismo
+    division + temporada + documento + fecha + momento + incidencia) no la
+    duplica. Devuelve cantidad creada/confirmada.
     """
     creadas = 0
     for _, t in df.iterrows():
-        client.table("tarjetas").insert({
+        payload = {
             "division": division,
             "temporada": temporada,
             "equipo_nombre": _coerce_str(t.get("Equipo")),
+            "documento": _coerce_str(t.get("Documento")) or None,
             "fecha": _ts_fecha(t.get("Fecha")),
             "incidencia": _normalizar_incidencia(t.get("Incidencia")),
             "instancia": t.get("Instancia") or "",
@@ -321,7 +325,11 @@ def _persistir_tarjetas(client, division, temporada, df):
             "momento": t.get("Momento") or "",
             "detalle": t.get("Detalle") or "",
             "jugador": t.get("Jugador") or "",
-        }).execute()
+        }
+        client.table("tarjetas") \
+            .upsert(payload, on_conflict="division,temporada,documento,fecha,momento,incidencia",
+                    ignore_duplicates=True) \
+            .execute()
         creadas += 1
     return creadas
 
@@ -372,7 +380,14 @@ def _tab_tarjetas(client):
     st.dataframe(preview[cols], use_container_width=True, hide_index=True)
 
     etiqueta = f"{division.strip()} · {int(temporada)}"
+    reemplazar = st.checkbox(
+        "Borrar las tarjetas previas de esta división + temporada antes de cargar "
+        "(usar al recargar el set completo; evita duplicados).",
+        value=False, key="tarj_reemplazar")
     if st.button(f"✔ Confirmar carga de {len(df)} tarjeta(s) para {etiqueta}", type="primary"):
+        if reemplazar:
+            client.table("tarjetas") \
+                .delete().eq("division", division.strip()).eq("temporada", int(temporada)).execute()
         creadas = _persistir_tarjetas(client, division.strip(), int(temporada), df)
         st.session_state["tarjetas_resultado"] = f"✅ {creadas} tarjeta(s) cargadas para {etiqueta}."
         st.cache_data.clear()

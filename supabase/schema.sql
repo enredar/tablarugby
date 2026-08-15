@@ -53,6 +53,7 @@ create table if not exists public.tarjetas (
   division text,                      -- año de nacimiento (ej: "2010")
   temporada integer,                  -- año calendario (ej: 2026)
   equipo_nombre text,                 -- nombre del club (independiente del torneo)
+  documento text,                     -- DNI del jugador (clave de dedupe)
   fecha timestamp,
   incidencia text,                    -- amarilla / roja / azul
   instancia text,
@@ -67,6 +68,10 @@ create index if not exists idx_partidos_etapa on public.partidos(etapa_id);
 create index if not exists idx_partidos_nro  on public.partidos(nro);
 create index if not exists idx_partidos_equipos on public.partidos(local_equipo_id, visitante_equipo_id);
 create index if not exists idx_tarjetas_equipo on public.tarjetas(equipo_id);
+
+-- Dedupe de tarjetas: evita duplicados al re-pegar (division+temporada+documento+fecha+momento+incidencia)
+create unique index if not exists uq_tarjetas_dedupe
+  on public.tarjetas (division, temporada, documento, fecha, momento, incidencia);
 
 -- ---------- RLS (Row Level Security) ----------
 alter table public.torneos  enable row level security;
