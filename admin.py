@@ -448,6 +448,41 @@ def _ver_tarjetas_existentes(client, division, temporada):
     return pd.DataFrame(filas)
 
 
+def _alerta_acumulacion(client, division, temporada, min_amarillas=3):
+    """Jugadores con N+ tarjetas amarillas acumuladas (sospecha de suspensión)."""
+    columnas = _columnas_tarjetas(client)
+    sel = ", ".join(c for c in ["division", "temporada", "equipo_nombre", "documento",
+                                "jugador", "incidencia"] if c in columnas)
+    if not sel:
+        return pd.DataFrame()
+    q = client.table("tarjetas").select(sel)
+    if "division" in columnas:
+        q = q.eq("division", division)
+    if "temporada" in columnas:
+        q = q.eq("temporada", temporada)
+    resp = q.execute()
+
+    grupos = {}
+    for t in resp.data:
+        incidencia = _normalizar_incidencia(t.get("incidencia") or "")
+        clave = (t.get("jugador") or "").strip() or (t.get("documento") or "").strip()
+        if not clave or incidencia != "Amarilla":
+            continue
+        g = grupos.setdefault(clave, {
+            "Jugador": t.get("jugador") or "",
+            "Documento": t.get("documento") or "",
+            "Equipo": t.get("equipo_nombre") or "",
+            "Amarillas": 0,
+        })
+        g["Amarillas"] += 1
+
+    filas = [g for g in grupos.values() if g["Amarillas"] >= min_amarillas]
+    if not filas:
+        return pd.DataFrame()
+    df = pd.DataFrame(filas).sort_values("Amarillas", ascending=False)
+    return df
+
+
 def _formatear_fecha_admin(iso):
     if not iso:
         return ""
@@ -473,6 +508,13 @@ def _tab_tarjetas(client):
         if not df_existentes.empty:
             with st.expander(f"📋 {len(df_existentes)} tarjeta(s) existentes para {division.strip()} · {int(temporada)}"):
                 st.dataframe(df_existentes, use_container_width=True, hide_index=True)
+
+        alerta = _alerta_acumulacion(client, division.strip(), int(temporada))
+        if not alerta.empty:
+            st.warning(
+                f"🚨 {len(alerta)} jugador(es) con 3+ tarjetas amarillas acumuladas "
+                "(posible suspensión):")
+            st.dataframe(alerta, use_container_width=True, hide_index=True)
 
     texto = st.text_area(
         "Pegá acá las filas copiadas de bd.uar (una por línea, separadas por tab):",
