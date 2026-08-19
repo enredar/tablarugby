@@ -226,6 +226,7 @@ def _persistir_partidos(client, torneo_id, registros):
 
     nuevos = 0
     actualizados = 0
+    errores = []
     for r in registros:
         local_id = _get_or_create_equipo(client, torneo_id, r.get("local_nombre"))
         visit_id = _get_or_create_equipo(client, torneo_id, r.get("visitante_nombre"))
@@ -244,14 +245,17 @@ def _persistir_partidos(client, torneo_id, registros):
             "estado": r.get("estado") or "Pendiente",
         }
 
-        if r.get("nro") and r["nro"] in existentes:
-            client.table("partidos").update(payload).eq("id", existentes[r["nro"]]).execute()
-            actualizados += 1
-        else:
-            client.table("partidos").insert(payload).execute()
-            nuevos += 1
+        try:
+            if r.get("nro") and r["nro"] in existentes:
+                client.table("partidos").update(payload).eq("id", existentes[r["nro"]]).execute()
+                actualizados += 1
+            else:
+                client.table("partidos").insert(payload).execute()
+                nuevos += 1
+        except Exception as e:
+            errores.append(f"Nro {r.get('nro')} ({r.get('local_nombre')} vs {r.get('visitante_nombre')}): {e}")
 
-    return nuevos, actualizados
+    return nuevos, actualizados, errores
 
 
 TARJETAS_COLUMNAS = ["Equipo", "Fecha", "Documento", "Incidencia", "Instancia", "Rival", "Momento", "Detalle", "Jugador"]
@@ -557,8 +561,11 @@ def _tab_pegar(client):
     # Resultado de la última carga (persiste entre reruns)
     if st.session_state.get("pegar_resultado"):
         st.success(st.session_state["pegar_resultado"])
+        for e in st.session_state.get("pegar_errores") or []:
+            st.error(e)
         if st.button("✖ Quitar mensaje"):
             st.session_state.pop("pegar_resultado", None)
+            st.session_state.pop("pegar_errores", None)
             st.rerun()
 
     if not texto.strip():
@@ -585,8 +592,12 @@ def _tab_pegar(client):
                  use_container_width=True, hide_index=True)
 
     if st.button(f"✔ Confirmar carga en {etiqueta}", type="primary"):
-        nuevos, actualizados = _persistir_partidos(client, torneo_id, registros)
-        st.session_state["pegar_resultado"] = f"✅ {nuevos} partido(s) cargados, {actualizados} actualizado(s)."
+        nuevos, actualizados, errores = _persistir_partidos(client, torneo_id, registros)
+        msg = f"✅ {nuevos} partido(s) cargados, {actualizados} actualizado(s)."
+        if errores:
+            msg += f" ⚠️ {len(errores)} error(es)."
+        st.session_state["pegar_resultado"] = msg
+        st.session_state["pegar_errores"] = errores
         st.cache_data.clear()
         st.rerun()
 
