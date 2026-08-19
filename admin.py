@@ -714,6 +714,110 @@ def _tab_editar(client):
             st.rerun()
 
 
+def _tab_editar_tabla(client):
+    st.subheader("📋 Editar partidos (tabla)")
+    st.caption("Edición tipo Excel: cambiá resultados, puntos, fecha, referee, estado o "
+               "el torneo destino y guardá. Las filas modificadas se marcan en amarillo.")
+
+    torneos = _get_torneos(client)
+    if torneos.empty:
+        st.info("No hay torneos aún.")
+        return
+    torneos["etiqueta"] = torneos.apply(_etiqueta_torneo, axis=1)
+    etiqueta = st.selectbox("Torneo", torneos["etiqueta"].tolist(), key="edit_tabla_torneo")
+    torneo_id = int(torneos.loc[torneos["etiqueta"] == etiqueta, "id"].iloc[0])
+
+    etapa_ids = _get_etapas(client, torneo_id)["id"].tolist()
+    if not etapa_ids:
+        st.info("Ese torneo no tiene etapas.")
+        return
+
+    partidos = client.table("partidos") \
+        .select("id, nro, etapa_id, resultado_local, resultado_visitante, "
+                "puntos_local, puntos_visitante, fecha_hora, referee, estado, "
+                "local_equipo:local_equipo_id(nombre), visitante_equipo:visitante_equipo_id(nombre)") \
+        .in_("etapa_id", etapa_ids).order("fecha_hora").execute()
+
+    if not partidos.data:
+        st.info("No hay partidos para editar.")
+        return
+
+    filas = []
+    for p in partidos.data:
+        filas.append({
+            "id": p["id"],
+            "Nro": p.get("nro"),
+            "Local": p["local_equipo"]["nombre"] if p.get("local_equipo") else "",
+            "Visitante": p["visitante_equipo"]["nombre"] if p.get("visitante_equipo") else "",
+            "ResultadoL": p["resultado_local"],
+            "ResultadoV": p["resultado_visitante"],
+            "PuntosL": p["puntos_local"],
+            "PuntosV": p["puntos_visitante"],
+            "Fecha": pd.to_datetime(p["fecha_hora"]).tz_localize(None) if p.get("fecha_hora") else None,
+            "Referee": p.get("referee") or "",
+            "Estado": p.get("estado") or "Pendiente",
+            "Torneo destino": etiqueta,
+        })
+    df_edit = pd.DataFrame(filas)
+
+    config = {
+        "id": st.column_config.NumberColumn("id", disabled=True, width="small"),
+        "Nro": st.column_config.NumberColumn("Nro", disabled=True, width="small"),
+        "Local": st.column_config.TextColumn("Local", disabled=True, width="medium"),
+        "Visitante": st.column_config.TextColumn("Visitante", disabled=True, width="medium"),
+        "ResultadoL": st.column_config.NumberColumn("Res. L", min_value=0, max_value=200, required=False),
+        "ResultadoV": st.column_config.NumberColumn("Res. V", min_value=0, max_value=200, required=False),
+        "PuntosL": st.column_config.NumberColumn("Pts. L", min_value=0, max_value=8, required=False),
+        "PuntosV": st.column_config.NumberColumn("Pts. V", min_value=0, max_value=8, required=False),
+        "Fecha": st.column_config.DatetimeColumn("Fecha y Hora", format="DD/MM/YYYY HH:mm", step=3600),
+        "Referee": st.column_config.TextColumn("Referee", width="medium"),
+        "Estado": st.column_config.SelectboxColumn(
+            "Estado", options=["Pendiente", "En Curso", "Cerrado"], required=True),
+        "Torneo destino": st.column_config.SelectboxColumn(
+            "Torneo destino", options=torneos["etiqueta"].tolist(), required=True, width="medium"),
+    }
+
+    st.data_editor(
+        df_edit, key="edit_tabla_df", hide_index=True,
+        use_container_width=True, column_config=config, num_rows="fixed",
+        height=min(len(df_edit) * 36 + 40, 700),
+    )
+
+    if st.button("💾 Guardar cambios", type="primary"):
+        editado = st.session_state["edit_tabla_df"]
+        cambios = 0
+        for i, row in editado.iterrows():
+            pid = int(row["id"])
+            orig = next(p for p in partidos.data if p["id"] == pid)
+            destino_etq = row["Torneo destino"]
+            destino_tid = int(torneos.loc[torneos["etiqueta"] == destino_etq, "id"].iloc[0])
+
+            payload = {
+                "resultado_local": row["ResultadoL"] if pd.notna(row["ResultadoL"]) else None,
+                "resultado_visitante": row["ResultadoV"] if pd.notna(row["ResultadoV"]) else None,
+                "puntos_local": int(row["PuntosL"]) if pd.notna(row["PuntosL"]) else None,
+                "puntos_visitante": int(row["PuntosV"]) if pd.notna(row["PuntosV"]) else None,
+                "fecha_hora": str(row["Fecha"]) if pd.notna(row["Fecha"]) else None,
+                "referee": row["Referee"] if isinstance(row["Referee"], str) else _coerce_str(row["Referee"]),
+                "estado": row["Estado"],
+            }
+
+            if destino_tid != torneo_id:
+                # Mover a otro torneo: reasignar etapa y equipos del torneo destino
+                payload["etapa_id"] = _get_or_create_etapa(client, destino_tid)
+                nombre_local = _coerce_str(row["Local"])
+                nombre_visit = _coerce_str(row["Visitante"])
+                payload["local_equipo_id"] = _get_or_create_equipo(client, destino_tid, nombre_local) or None
+                payload["visitante_equipo_id"] = _get_or_create_equipo(client, destino_tid, nombre_visit) or None
+
+            client.table("partidos").update(payload).eq("id", pid).execute()
+            cambios += 1
+
+        st.session_state["pegar_resultado"] = f"✅ {cambios} partido(s) actualizado(s)."
+        st.cache_data.clear()
+        st.rerun()
+
+
 def _tab_migrar(client):
     import google_sheets_client as gsc
     from logic import parse_resultado as _pr
@@ -875,12 +979,15 @@ def render_admin():
         st.error(f"No se pudo conectar: {e}")
         return
 
-    tab_pegar, tab_edit, tab_tor, tab_mig, tab_tarj = st.tabs(
-        ["📥 Pegar partidos", "✏️ Editar partido", "🏆 Torneos", "🔁 Migrar planilla", "🟨🟥 Pegar tarjetas"])
+    tab_pegar, tab_edit, tab_edit_tabla, tab_tor, tab_mig, tab_tarj = st.tabs(
+        ["📥 Pegar partidos", "✏️ Editar partido", "📋 Editar tabla",
+         "🏆 Torneos", "🔁 Migrar planilla", "🟨🟥 Pegar tarjetas"])
     with tab_pegar:
         _tab_pegar(client)
     with tab_edit:
         _tab_editar(client)
+    with tab_edit_tabla:
+        _tab_editar_tabla(client)
     with tab_tor:
         _tab_torneos(client)
     with tab_mig:
