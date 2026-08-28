@@ -345,6 +345,30 @@ def _columnas_tarjetas(client):
     return columnas
 
 
+def _claves_tarjetas_existentes(client, division, temporada) -> set:
+    """Devuelve el set de claves de dedupe de las tarjetas ya cargadas
+    para división + temporada."""
+    columnas = _columnas_tarjetas(client)
+
+    def _has(col):
+        return col in columnas
+
+    existentes = set()
+    sel = ", ".join(c for c in ["division", "temporada", "documento", "fecha",
+                                "momento", "incidencia"] if _has(c))
+    if not sel:
+        return existentes
+    q = client.table("tarjetas").select(sel)
+    if _has("division"):
+        q = q.eq("division", division)
+    if _has("temporada"):
+        q = q.eq("temporada", temporada)
+    resp = q.execute()
+    for row in resp.data:
+        existentes.add(_clave_tarjeta(row))
+    return existentes
+
+
 def _persistir_tarjetas(client, division, temporada, df):
     """Inserta tarjetas (división + año calendario, independientes del torneo).
 
@@ -359,18 +383,7 @@ def _persistir_tarjetas(client, division, temporada, df):
         return col in columnas
 
     # Claves existentes para no duplicar
-    existentes = set()
-    sel = ", ".join(c for c in ["division", "temporada", "documento", "fecha",
-                                "momento", "incidencia"] if _has(c))
-    if sel:
-        q = client.table("tarjetas").select(sel)
-        if _has("division"):
-            q = q.eq("division", division)
-        if _has("temporada"):
-            q = q.eq("temporada", temporada)
-        resp = q.execute()
-        for row in resp.data:
-            existentes.add(_clave_tarjeta(row))
+    existentes = _claves_tarjetas_existentes(client, division, temporada)
 
     creadas = 0
     for _, t in df.iterrows():
@@ -506,8 +519,13 @@ def _tab_tarjetas(client):
     if division.strip():
         df_existentes = _ver_tarjetas_existentes(client, division.strip(), int(temporada))
         if not df_existentes.empty:
-            with st.expander(f"📋 {len(df_existentes)} tarjeta(s) existentes para {division.strip()} · {int(temporada)}"):
+            st.info(f"Ya hay **{len(df_existentes)}** tarjeta(s) cargadas para "
+                    f"{division.strip()} · {int(temporada)}. Podés revisarlas abajo.")
+            with st.expander(f"📋 Ver las {len(df_existentes)} tarjeta(s) existentes "
+                             f"(abre para chequear qué hay cargado)", expanded=True):
                 st.dataframe(df_existentes, use_container_width=True, hide_index=True)
+        else:
+            st.caption("Todavía no hay tarjetas cargadas para esta división + temporada.")
 
         alerta = _alerta_acumulacion(client, division.strip(), int(temporada))
         if not alerta.empty:
@@ -545,15 +563,45 @@ def _tab_tarjetas(client):
     preview = df.copy()
     preview["Interpretado"] = preview.apply(
         lambda r: f"{r['Equipo']} · {r['Incidencia']} vs {r['Rival']} ({r['Fecha'] or '-'})", axis=1)
-    cols = [c for c in TARJETAS_COLUMNAS if c in preview.columns]
-    st.dataframe(preview[cols], use_container_width=True, hide_index=True)
+
+    existentes = _claves_tarjetas_existentes(client, division.strip(), int(temporada))
+
+    def _es_duplicada(row):
+        return _clave_tarjeta({
+            "division": division.strip(),
+            "temporada": int(temporada),
+            "documento": row.get("Documento"),
+            "fecha": row.get("Fecha"),
+            "momento": row.get("Momento"),
+            "incidencia": row.get("Incidencia"),
+        }) in existentes
+
+    preview["Ya existe"] = preview.apply(_es_duplicada, axis=1)
+    n_nuevas = int((~preview["Ya existe"]).sum())
+    n_dup = int(preview["Ya existe"].sum())
+
+    cols = [c for c in ["Equipo", "Fecha", "Documento", "Jugador", "Incidencia",
+                        "Instancia", "Rival", "Momento", "Detalle", "Ya existe"]
+            if c in preview.columns or c == "Ya existe"]
+    st.dataframe(
+        preview[cols].style.apply(
+            lambda r: ["background-color: rgba(241,196,15,0.15)"] * len(r) if r["Ya existe"] else [""] * len(r),
+            axis=1),
+        use_container_width=True, hide_index=True,
+    )
+    if n_dup:
+        st.info(f"🔁 **{n_dup}** de esas filas **ya están cargadas** y se van a ignorar. "
+                f"Se cargarán **{n_nuevas}** nueva(s).")
+    else:
+        st.info(f"Se cargarán las **{n_nuevas}** filas (ninguna ya existe).")
 
     etiqueta = f"{division.strip()} · {int(temporada)}"
     reemplazar = st.checkbox(
         "Borrar las tarjetas previas de esta división + temporada antes de cargar "
         "(usar al recargar el set completo; evita duplicados).",
         value=False, key="tarj_reemplazar")
-    if st.button(f"✔ Confirmar carga de {len(df)} tarjeta(s) para {etiqueta}", type="primary"):
+    if st.button(f"✔ Confirmar carga de {len(df)} tarjeta(s) para {etiqueta} "
+                 f"({n_dup} se ignorarán)", type="primary"):
         if reemplazar:
             client.table("tarjetas") \
                 .delete().eq("division", division.strip()).eq("temporada", int(temporada)).execute()
