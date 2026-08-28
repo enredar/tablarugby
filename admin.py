@@ -833,17 +833,16 @@ def _tab_editar_tabla(client):
             "🗑️ Eliminar", help="Tildá para borrar el partido de la base", required=False),
     }
 
-    st.data_editor(
+    edited_df = st.data_editor(
         df_edit, key="edit_tabla_df", hide_index=True,
         use_container_width=True, column_config=config, num_rows="fixed",
         height=min(len(df_edit) * 36 + 40, 700),
     )
 
-    editado = st.session_state["edit_tabla_df"]
     marcas_borrar = []
     try:
         marcas_borrar = [int(pid) for pid, b in
-                         zip(editado["id"], editado["Borrar"]) if bool(b)]
+                         zip(edited_df["id"], edited_df["Borrar"]) if bool(b)]
     except Exception:
         pass
 
@@ -872,7 +871,7 @@ def _tab_editar_tabla(client):
                 st.rerun()
 
     if guardar_ok:
-        editado = st.session_state["edit_tabla_df"]
+        editado = edited_df
         cambios = 0
         for i, row in editado.iterrows():
             pid = int(row["id"])
