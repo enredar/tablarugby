@@ -810,6 +810,7 @@ def _tab_editar_tabla(client):
             "Referee": p.get("referee") or "",
             "Estado": p.get("estado") or "Pendiente",
             "Torneo destino": etiqueta,
+            "Borrar": False,
         })
     df_edit = pd.DataFrame(filas)
 
@@ -828,6 +829,8 @@ def _tab_editar_tabla(client):
             "Estado", options=["Pendiente", "En Curso", "Cerrado"], required=True),
         "Torneo destino": st.column_config.SelectboxColumn(
             "Torneo destino", options=torneos["etiqueta"].tolist(), required=True, width="medium"),
+        "Borrar": st.column_config.CheckboxColumn(
+            "🗑️ Eliminar", help="Tildá para borrar el partido de la base", required=False),
     }
 
     st.data_editor(
@@ -836,7 +839,39 @@ def _tab_editar_tabla(client):
         height=min(len(df_edit) * 36 + 40, 700),
     )
 
-    if st.button("💾 Guardar cambios", type="primary"):
+    editado = st.session_state["edit_tabla_df"]
+    marcas_borrar = []
+    try:
+        marcas_borrar = [int(pid) for pid, b in
+                         zip(editado["id"], editado["Borrar"]) if bool(b)]
+    except Exception:
+        pass
+
+    col_guardar, col_borrar = st.columns([1, 1])
+    with col_guardar:
+        guardar_ok = st.button("💾 Guardar cambios", type="primary",
+                               key="edit_tabla_btn_guardar")
+    with col_borrar:
+        borrar_ok = st.button("🗑️ Eliminar marcados", type="secondary",
+                              disabled=not marcas_borrar,
+                              key="edit_tabla_btn_borrar")
+
+    if marcas_borrar and borrar_ok:
+        st.session_state["edit_tabla_confirm_borrar"] = True
+
+    if st.session_state.get("edit_tabla_confirm_borrar") and marcas_borrar:
+        if st.checkbox("Confirmo el borrado permanente de estos partidos",
+                       key="edit_tabla_confirmar_borrar"):
+            if st.button("🗑️ Borrar definitivamente", type="primary",
+                         key="edit_tabla_btn_borrar_final"):
+                client.table("partidos").delete().in_("id", marcas_borrar).execute()
+                st.session_state.pop("edit_tabla_confirm_borrar", None)
+                st.session_state["pegar_resultado"] = (
+                    f"✅ {len(marcas_borrar)} partido(s) eliminado(s).")
+                st.cache_data.clear()
+                st.rerun()
+
+    if guardar_ok:
         editado = st.session_state["edit_tabla_df"]
         cambios = 0
         for i, row in editado.iterrows():
@@ -869,6 +904,95 @@ def _tab_editar_tabla(client):
         st.session_state["pegar_resultado"] = f"✅ {cambios} partido(s) actualizado(s)."
         st.cache_data.clear()
         st.rerun()
+
+
+def _tab_quitar_duplicados(client):
+    """Borra partidos cargados por error en la división Plata.
+
+    Como el `nro` de bd.uar es único en toda la tabla de partidos, un partido
+    de Oro pegado por error en Plata no puede coexistir con el mismo `nro` en
+    Oro. Por eso este panel lista TODOS los partidos de cada torneo de Plata
+    para que el admin marque los que cargó mal y los borre.
+    """
+    st.subheader("🗑️ Quitar partidos cargados por error (Plata)")
+    st.caption(
+        "Elegí un torneo de división **Plata** y marcá los partidos que pegaste "
+        "por error. Al confirmar se borran **solo de la división Plata** (el "
+        "torneo Oro no se toca)."
+    )
+
+    torneos = _get_torneos(client)
+    if torneos.empty:
+        st.info("No hay torneos.")
+        return
+
+    torneos["_tipo"] = torneos["nombre"].apply(_tipo_torneo)
+    torneos["etiqueta"] = torneos.apply(_etiqueta_torneo, axis=1)
+    plata = torneos[torneos["_tipo"] == "Plata"]
+
+    if plata.empty:
+        st.info("No hay torneos de división Plata.")
+        return
+
+    etiqueta = st.selectbox("Torneo de Plata", plata["etiqueta"].tolist(),
+                            key="quitar_dup_torneo")
+    torneo_id = int(plata.loc[plata["etiqueta"] == etiqueta, "id"].iloc[0])
+
+    etapa_ids = _get_etapas(client, torneo_id)["id"].tolist()
+    if not etapa_ids:
+        st.info("Ese torneo no tiene partidos.")
+        return
+
+    partidos = client.table("partidos") \
+        .select("id, nro, resultado_local, resultado_visitante, fecha_hora, estado, "
+                "local_equipo:local_equipo_id(nombre), "
+                "visitante_equipo:visitante_equipo_id(nombre)") \
+        .in_("etapa_id", etapa_ids).order("fecha_hora").execute()
+
+    if not partidos.data:
+        st.info("Ese torneo de Plata no tiene partidos.")
+        return
+
+    filas = []
+    for p in partidos.data:
+        res_l, res_v = p.get("resultado_local"), p.get("resultado_visitante")
+        if res_l is not None or res_v is not None:
+            marcador = f"{res_l or ''} - {res_v or ''}"
+        else:
+            marcador = "Pendiente"
+        filas.append({
+            "Nro": p.get("nro"),
+            "Local": p["local_equipo"]["nombre"] if p.get("local_equipo") else "",
+            "Resultado": marcador,
+            "Visitante": p["visitante_equipo"]["nombre"] if p.get("visitante_equipo") else "",
+            "Estado": p.get("estado") or "Pendiente",
+            "_id": p["id"],
+        })
+    df = pd.DataFrame(filas)
+
+    seleccion = st.dataframe(
+        df[["Nro", "Local", "Resultado", "Visitante", "Estado"]],
+        hide_index=True, use_container_width=True,
+        on_select="rerun", selection_mode="multi-row",
+        key="quitar_dup_sel",
+    )
+
+    nro_filas = len(df)
+    filas_sel = len(seleccion.selection.rows) if seleccion and seleccion.selection else 0
+    st.caption(f"{filas_sel} de {nro_filas} partido(s) seleccionado(s).")
+
+    if filas_sel == 0:
+        return
+
+    ids_sel = df.iloc[list(seleccion.selection.rows)]["_id"].tolist()
+
+    if st.checkbox(f"Confirmo que quiero borrar {filas_sel} partido(s) de '{etiqueta}'",
+                   key="quitar_dup_confirm"):
+        if st.button("🗑️ Borrar selección de Plata", type="primary", key="quitar_dup_borrar"):
+            client.table("partidos").delete().in_("id", ids_sel).execute()
+            st.cache_data.clear()
+            st.success(f"✅ Se borraron {len(ids_sel)} partido(s) de {etiqueta}. Refrescá la app.")
+            st.rerun()
 
 
 def _tab_migrar(client):
@@ -1032,9 +1156,10 @@ def render_admin():
         st.error(f"No se pudo conectar: {e}")
         return
 
-    tab_pegar, tab_edit, tab_edit_tabla, tab_tor, tab_mig, tab_tarj = st.tabs(
+    tab_pegar, tab_edit, tab_edit_tabla, tab_tor, tab_mig, tab_tarj, tab_quitar = st.tabs(
         ["📥 Pegar partidos", "✏️ Editar partido", "📋 Editar tabla",
-         "🏆 Torneos", "🔁 Migrar planilla", "🟨🟥 Pegar tarjetas"])
+         "🏆 Torneos", "🔁 Migrar planilla", "🟨🟥 Pegar tarjetas",
+         "🗑️ Quitar duplicados"])
     with tab_pegar:
         _tab_pegar(client)
     with tab_edit:
@@ -1047,3 +1172,5 @@ def render_admin():
         _tab_migrar(client)
     with tab_tarj:
         _tab_tarjetas(client)
+    with tab_quitar:
+        _tab_quitar_duplicados(client)
