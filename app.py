@@ -133,7 +133,9 @@ def procesar_partidos(df):
             pos["PB"] = 0
 
     tabla = pd.DataFrame(list(posiciones.values()))
-    
+    if tabla.empty:
+        return pd.DataFrame(columns=["Pos.", "Equipo", "PTS", "PJ", "PG", "PE", "PP", "PB", "PF", "PC", "DIF"])
+
     # Criterio Desempate: Se agrega el PB antes de DIF
     tabla = tabla.sort_values(by=["PTS", "PB", "DIF", "PF"], ascending=[False, False, False, False]).reset_index(drop=True)
     
@@ -891,33 +893,36 @@ if ano_nac_seleccionado_str:
                 # Tabla directa sin subheader redundante
                 tabla_posiciones = procesar_partidos(df_jugados)
 
-                # Estilizar la tabla (verde para Top 4, amarillo hasta el corte de clasificación)
-                def color_clasificacion(row):
-                    if row.name < 4:  # Índices 0-3: Top 4 clasificación directa
-                        return ['background-color: rgba(46, 204, 113, 0.15)'] * len(row)
-                    elif row.name < corte_top:  # Índices 4+ hasta el corte: repechaje
-                        return ['background-color: rgba(241, 196, 15, 0.10)'] * len(row)
-                    return [''] * len(row)
+                if tabla_posiciones.empty:
+                    st.info("Todavía no hay partidos cerrados en este torneo.")
+                else:
+                    # Estilizar la tabla (verde para Top 4, amarillo hasta el corte de clasificación)
+                    def color_clasificacion(row):
+                        if row.name < 4:  # Índices 0-3: Top 4 clasificación directa
+                            return ['background-color: rgba(46, 204, 113, 0.15)'] * len(row)
+                        elif row.name < corte_top:  # Índices 4+ hasta el corte: repechaje
+                            return ['background-color: rgba(241, 196, 15, 0.10)'] * len(row)
+                        return [''] * len(row)
 
-                tabla_estilizada = tabla_posiciones.style.apply(color_clasificacion, axis=1)
+                    tabla_estilizada = tabla_posiciones.style.apply(color_clasificacion, axis=1)
 
-                # Calcular altura dinámica
-                filas = len(tabla_posiciones)
-                altura = int(filas * 35 + 40)
+                    # Calcular altura dinámica
+                    filas = len(tabla_posiciones)
+                    altura = int(filas * 35 + 40)
 
-                # Botón de descarga de imagen
-                col_izq, col_der = st.columns([8, 2])
-                with col_der:
-                    img_bytes = generar_imagen_tabla(tabla_posiciones, es_posiciones=True, corte_top=corte_top)
-                    st.download_button(
-                        label="📸 Descargar",
-                        data=img_bytes,
-                        file_name=f"posiciones_{ano_nac_seleccionado_str}.png",
-                        mime="image/png",
-                        use_container_width=True
-                    )
+                    # Botón de descarga de imagen
+                    col_izq, col_der = st.columns([8, 2])
+                    with col_der:
+                        img_bytes = generar_imagen_tabla(tabla_posiciones, es_posiciones=True, corte_top=corte_top)
+                        st.download_button(
+                            label="📸 Descargar",
+                            data=img_bytes,
+                            file_name=f"posiciones_{ano_nac_seleccionado_str}.png",
+                            mime="image/png",
+                            use_container_width=True
+                        )
 
-                st.dataframe(tabla_estilizada, hide_index=True, use_container_width=True, height=altura)
+                    st.dataframe(tabla_estilizada, hide_index=True, use_container_width=True, height=altura)
 
             # --- RESULTADOS POR FECHA ---
             with tab_res:
