@@ -699,7 +699,7 @@ def _tab_torneos(client):
     with st.form("nuevo_torneo"):
         division = st.text_input("División (año de nacimiento, ej: 2010)")
         temporada = st.number_input("Temporada", min_value=2000, max_value=2100, value=2026, step=1)
-        tipo = st.selectbox("Tipo de torneo", ["Clasificatorio", "Oro", "Plata", "Regular"])
+        tipo = st.selectbox("Tipo de torneo", ["Clasificatorio", "Oro", "Plata", "Regular", "Final Four"])
         corte_top = st.number_input("Corte clasificación (cuántos clasifican)", min_value=1, max_value=50, value=7)
         activo = st.checkbox("Activo")
         enviar = st.form_submit_button("Crear torneo")
