@@ -1135,12 +1135,15 @@ if ano_nac_seleccionado_str:
                 if 'equipo_sel_pop' not in st.session_state or st.session_state['equipo_sel_pop'] not in equipos:
                     st.session_state['equipo_sel_pop'] = equipos[default_index] if equipos else None
                 
-                with st.expander(f"📍 Cambiar Equipo (Actual: {st.session_state['equipo_sel_pop']})"):
-                    cols_e = st.columns(2)
-                    for i, e_op in enumerate(equipos):
-                        if cols_e[i % 2].button(e_op, use_container_width=True, key=f"btn_e_exp_{e_op}"):
-                            st.session_state['equipo_sel_pop'] = e_op
-                            st.rerun()
+                if not equipos:
+                    st.info("No hay equipos en la tabla de posiciones todavía.")
+                else:
+                    with st.expander(f"📍 Cambiar Equipo (Actual: {st.session_state['equipo_sel_pop']})"):
+                        cols_e = st.columns(2)
+                        for i, e_op in enumerate(equipos):
+                            if cols_e[i % 2].button(e_op, use_container_width=True, key=f"btn_e_exp_{e_op}"):
+                                st.session_state['equipo_sel_pop'] = e_op
+                                st.rerun()
                 
                 equipo_sel = st.session_state['equipo_sel_pop']
 
